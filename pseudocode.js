@@ -126,9 +126,12 @@ function outputRuby(node, output, depth) {
   }
 }
 
-function toRubyParams(params, braces) {
+function toRubyParams(params, depth, braces) {
   braces = braces || '()';
-  return braces.charAt(0) + Lazy(params).map(toRubyExpression).join(', ') + braces.charAt(1);
+  var paramExpressions = Lazy(params).map(function(param) {
+    return toRubyExpression(param, depth);
+  });
+  return braces.charAt(0) + paramExpressions.join(', ') + braces.charAt(1);
 }
 
 function toRubyExpression(expression, depth) {
@@ -146,33 +149,33 @@ function toRubyExpression(expression, depth) {
       return expression.value;
 
     case 'ArrayExpression':
-      return toRubyParams(expression.elements, '[]');
+      return toRubyParams(expression.elements, depth, '[]');
 
     case 'AssignmentExpression':
-      return toRubyExpression(expression.left) + ' ' + toRubyOperator(expression.operator) + ' ' + toRubyExpression(expression.right);
+      return toRubyExpression(expression.left, depth) + ' ' + toRubyOperator(expression.operator) + ' ' + toRubyExpression(expression.right, depth);
 
     case 'BinaryExpression':
-      return toRubyExpression(expression.left) + ' ' + toRubyOperator(expression.operator) + ' ' + toRubyExpression(expression.right);
+      return toRubyExpression(expression.left, depth) + ' ' + toRubyOperator(expression.operator) + ' ' + toRubyExpression(expression.right, depth);
 
     case 'CallExpression':
-      return toRubyExpression(expression.callee) + toRubyParams(expression.arguments);
+      return toRubyExpression(expression.callee, depth) + toRubyParams(expression.arguments, depth);
 
     case 'ConditionalExpression':
-      return toRubyExpression(expression.test) + ' ? ' +
-        toRubyExpression(expression.consequent) + ' : ' +
-        toRubyExpression(expression.alternate);
+      return toRubyExpression(expression.test, depth) + ' ? ' +
+        toRubyExpression(expression.consequent, depth) + ' : ' +
+        toRubyExpression(expression.alternate, depth);
 
     case 'FunctionExpression':
       return toRubyLambda(expression, depth);
 
     case 'LogicalExpression':
-      return toRubyExpression(expression.left) + ' ' + toRubyOperator(expression.operator) + ' ' + toRubyExpression(expression.right);
+      return toRubyExpression(expression.left, depth) + ' ' + toRubyOperator(expression.operator) + ' ' + toRubyExpression(expression.right, depth);
 
     case 'MemberExpression':
-      return toRubyExpression(expression.object) + '.' + toRubyExpression(expression.property);
+      return toRubyExpression(expression.object, depth) + '.' + toRubyExpression(expression.property, depth);
 
     case 'NewExpression':
-      return toRubyExpression(expression.callee) + '.new' + toRubyParams(expression.arguments);
+      return toRubyExpression(expression.callee, depth) + '.new' + toRubyParams(expression.arguments, depth);
 
     case 'ThisExpression':
       return 'self';
@@ -189,7 +192,7 @@ function toRubyLambda(functionExpression, depth) {
   depth = depth || 0;
 
   var buffer = new StringOutput();
-  buffer.out('lambda { ' + toRubyParams(functionExpression.params, '||'), 0);
+  buffer.out('lambda { ' + toRubyParams(functionExpression.params, depth, '||'), 0);
   outputRuby(functionExpression.body, buffer, depth + 1);
   buffer.out('}', depth);
 
