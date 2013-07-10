@@ -8,6 +8,16 @@ function ConsoleOutput() {
   };
 };
 
+function StringOutput() {
+  var buffer = [];
+  this.out = function(msg, depth) {
+    buffer.push(indent(depth) + msg);
+  };
+  this.toString = function() {
+    return buffer.join('\n');
+  };
+}
+
 function indent(depth) {
   return new Array(depth + 1).join('  ');
 }
@@ -16,7 +26,7 @@ function outputRuby(node, output, depth) {
   output = output || new ConsoleOutput();
 
   if (typeof node.type === 'undefined') {
-    console.log('WTF? ' + JSON.stringify(node));
+    // console.log('WTF? ' + JSON.stringify(node));
     return;
   }
 
@@ -33,8 +43,16 @@ function outputRuby(node, output, depth) {
       });
       break;
 
+    case 'BreakStatement':
+      output.out('break', depth);
+      break;
+
+    case 'EmptyStatement':
+      output.out('\n', 0);
+      break;
+
     case 'ExpressionStatement':
-      output.out(toRubyExpression(node.expression), depth);
+      output.out(toRubyExpression(node.expression, depth), depth);
       break;
 
     case 'FunctionDeclaration':
@@ -44,13 +62,40 @@ function outputRuby(node, output, depth) {
       break;
 
     case 'IfStatement':
-      output.out('if ' + toRubyExpression(node.test), depth);
+      output.out('if ' + toRubyExpression(node.test, depth), depth);
       outputRuby(node.consequent, output, depth + 1);
       if (node.alternate) {
         output.out('else', depth);
         outputRuby(node.alternate, output, depth + 1);
       }
       output.out('end', depth);
+      break;
+
+    case 'SwitchStatement':
+      output.out('case ' + toRubyExpression(node.discriminant, depth), depth);
+      Lazy(node.cases).each(function(child) {
+        outputRuby(child, output, depth);
+      });
+      output.out('end', depth);
+      break;
+
+    case 'SwitchCase':
+      if (node.test) {
+        output.out('when ' + toRubyExpression(node.test, depth), depth);
+      } else {
+        output.out('else', depth);
+      }
+      Lazy(node.consequent).each(function(child) {
+        outputRuby(child, output, depth + 1);
+      });
+      break;
+
+    case 'ThrowStatement':
+      if (node.argument) {
+        output.out('raise ' + toRubyExpression(node.argument, depth), depth);
+      } else {
+        output.out('raise', depth);
+      }
       break;
 
     case 'VariableDeclaration':
@@ -60,28 +105,33 @@ function outputRuby(node, output, depth) {
       break;
 
     case 'VariableDeclarator':
-      output.out(node.id.name + ' = ' + (node.init ? toRubyExpression(node.init) : 'nil'), depth);
+      output.out(node.id.name + ' = ' + (node.init ? toRubyExpression(node.init, depth) : 'nil'), depth);
       break;
 
     case 'WhileStatement':
-      output.out('while ' + toRubyExpression(node.test), depth);
+      output.out('while ' + toRubyExpression(node.test, depth), depth);
       outputRuby(node.body, output, depth + 1);
       break;
 
     case 'ReturnStatement':
-      output.out('return ' + toRubyExpression(node.argument), depth);
+      if (node.argument) {
+        output.out('return ' + toRubyExpression(node.argument, depth), depth);
+      } else {
+        output.out('return', depth);
+      }
       break;
 
     default:
-      throw 'Unknown node type: "' + node.type + '":\n' + JSON.stringify(node, null, 2);
+      throw 'Unknown node type: "' + node.type + '":\n' + JSON.stringify(node, null, 2).substring(0, 1000);
   }
 }
 
-function toRubyParams(params) {
-  return '(' + Lazy(params).pluck('name').join(', ') + ')';
+function toRubyParams(params, braces) {
+  braces = braces || '()';
+  return braces.charAt(0) + Lazy(params).map(toRubyExpression).join(', ') + braces.charAt(1);
 }
 
-function toRubyExpression(expression) {
+function toRubyExpression(expression, depth) {
   switch (expression.type) {
     case 'Identifier':
       return expression.name;
@@ -90,7 +140,13 @@ function toRubyExpression(expression) {
       if (expression.value === 'undefined' || expression.value === 'null') {
         return 'nil';
       }
+      if (typeof expression.value === 'string') {
+        return '"' + expression.value.replace(/\n/g, '\\n') + '"';
+      }
       return expression.value;
+
+    case 'ArrayExpression':
+      return toRubyParams(expression.elements, '[]');
 
     case 'AssignmentExpression':
       return toRubyExpression(expression.left) + ' ' + toRubyOperator(expression.operator) + ' ' + toRubyExpression(expression.right);
@@ -98,16 +154,55 @@ function toRubyExpression(expression) {
     case 'BinaryExpression':
       return toRubyExpression(expression.left) + ' ' + toRubyOperator(expression.operator) + ' ' + toRubyExpression(expression.right);
 
+    case 'CallExpression':
+      return toRubyExpression(expression.callee) + toRubyParams(expression.arguments);
+
     case 'ConditionalExpression':
       return toRubyExpression(expression.test) + ' ? ' +
         toRubyExpression(expression.consequent) + ' : ' +
         toRubyExpression(expression.alternate);
 
+    case 'FunctionExpression':
+      return toRubyLambda(expression, depth);
+
+    case 'LogicalExpression':
+      return toRubyExpression(expression.left) + ' ' + toRubyOperator(expression.operator) + ' ' + toRubyExpression(expression.right);
+
     case 'MemberExpression':
       return toRubyExpression(expression.object) + '.' + toRubyExpression(expression.property);
 
+    case 'NewExpression':
+      return toRubyExpression(expression.callee) + '.new' + toRubyParams(expression.arguments);
+
+    case 'ThisExpression':
+      return 'self';
+
+    case 'UnaryExpression':
+      return toRubyUnaryExpression(expression);
+
     default:
       throw 'Unknown expression type: "' + expression.type + '":\n' + JSON.stringify(expression, null, 2);
+  }
+}
+
+function toRubyLambda(functionExpression, depth) {
+  depth = depth || 0;
+
+  var buffer = new StringOutput();
+  buffer.out('lambda { ' + toRubyParams(functionExpression.params, '||'), 0);
+  outputRuby(functionExpression.body, buffer, depth + 1);
+  buffer.out('}', depth);
+
+  return buffer.toString();
+}
+
+function toRubyUnaryExpression(expression) {
+  switch (expression.operator) {
+    case 'typeof':
+      return toRubyExpression(expression.argument) + '.class';
+
+    default:
+      return expression.operator + '(' + toRubyExpression(expression.argument) + ')';
   }
 }
 
@@ -115,6 +210,6 @@ function toRubyOperator(operator) {
   return operator;
 }
 
-var binarySearchJs = fs.readFileSync('binarySearch.js');
+var binarySearchJs = fs.readFileSync(__filename);
 var ast = esprima.parse(binarySearchJs);
 outputRuby(ast);
