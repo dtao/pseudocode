@@ -1,4 +1,4 @@
-def sortedIndex(haystack, needle)
+def binary_search(haystack, needle)
   low = 0
   high = haystack ? haystack.length : low
   current = nil

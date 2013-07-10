@@ -63,7 +63,7 @@ function outputRuby(node, output, depth) {
       break;
 
     case 'FunctionDeclaration':
-      output.out('def ' + node.id.name + toRubyParams(node.params), depth);
+      output.out('def ' + toRubyExpression(node.id) + toRubyParams(node.params), depth);
       outputRuby(node.body, output, depth + 1);
       output.out('end', depth);
       break;
@@ -144,7 +144,7 @@ function toRubyParams(params, depth, braces) {
 function toRubyExpression(expression, depth) {
   switch (expression.type) {
     case 'Identifier':
-      return expression.name;
+      return fromCamelCase(expression.name).toSnakeCase();
 
     case 'Literal':
       if (expression.value === 'undefined' || expression.value === 'null') {
@@ -218,6 +218,36 @@ function toRubyUnaryExpression(expression) {
 
 function toRubyOperator(operator) {
   return operator;
+}
+
+function TokenTranslator(parts) {
+  this.parts = parts;
+}
+
+TokenTranslator.prototype.toSnakeCase = function() {
+  var lowerCaseParts = Lazy(this.parts).map(function(str) {
+    return str.toLowerCase();
+  })
+
+  return lowerCaseParts.join('_');
+};
+
+function fromCamelCase(token) {
+  var match,
+      index = 0,
+      parts = [];
+
+  var pattern = /[^A-Z][A-Z]/g;
+  while (match = pattern.exec(token)) {
+    parts.push(token.substring(index, match.index + 1));
+    index = match.index + 1;
+  }
+
+  if (index < token.length - 1) {
+    parts.push(token.substring(index));
+  }
+
+  return new TokenTranslator(parts);
 }
 
 var file = path.join('samples', 'binarySearch.js');

@@ -1,4 +1,4 @@
-function sortedIndex(haystack, needle) {
+function binarySearch(haystack, needle) {
   var low = 0,
       high = haystack ? haystack.length : low,
       current;
