@@ -1,6 +1,7 @@
-var fs = require('fs');
+var fs      = require('fs');
+var path    = require('path');
 var esprima = require('esprima');
-var Lazy = require('lazy.js');
+var Lazy    = require('lazy.js');
 
 function ConsoleOutput() {
   this.out = function(msg, depth) {
@@ -15,6 +16,12 @@ function StringOutput() {
   };
   this.toString = function() {
     return buffer.join('\n');
+  };
+}
+
+function StreamOutput(stream) {
+  this.out = function(msg, depth) {
+    stream.write(indent(depth) + msg + '\n');
   };
 }
 
@@ -213,6 +220,11 @@ function toRubyOperator(operator) {
   return operator;
 }
 
-var binarySearchJs = fs.readFileSync(__filename);
-var ast = esprima.parse(binarySearchJs);
-outputRuby(ast);
+var file = path.join('samples', 'binarySearch.js');
+var js   = fs.readFileSync(file);
+var ast  = esprima.parse(js);
+var out  = path.basename(file, '.js') + '.rb'
+
+outputRuby(ast, new StreamOutput(fs.createWriteStream(path.join('samples', out), {
+  encoding: 'utf-8'
+})));
