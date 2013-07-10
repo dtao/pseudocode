@@ -1,0 +1,11 @@
+{
+  "name": "pseudocode",
+  "description": "Just what the name says",
+  "version": "0.0.1",
+  "author": "Dan Tao (daniel.tao@gmail.com)",
+  "repository": "git@github.com:dtao/pseudocode.git",
+  "dependencies": {
+    "esprima": ">= 1.0.3",
+    "lazy.js": ">= 0.1.0"
+  }
+}
