@@ -4,6 +4,7 @@
   "version": "0.0.1",
   "author": "Dan Tao (daniel.tao@gmail.com)",
   "repository": "git@github.com:dtao/pseudocode.git",
+  "main": "pseudocode.js",
   "dependencies": {
     "esprima": ">= 1.0.3",
     "lazy.js": ">= 0.1.0"
