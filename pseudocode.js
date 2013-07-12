@@ -45,7 +45,9 @@ Pseudocode.Node.inherit = function(functions) {
   var ctor = function(rawNode, parent) {
     var self    = this;
     self.node   = rawNode;
+    self.type   = rawNode && rawNode.type;
     self.parent = parent;
+    self.scope  = parent && parent.childScope() || self;
     self.depth  = parent && parent.childDepth() || 0;
 
     var rawChildren = self.rawChildren();
@@ -91,6 +93,10 @@ Pseudocode.Node.prototype.childDepth = function() {
   return this.depth + 1;
 };
 
+Pseudocode.Node.prototype.childScope = function() {
+  return this.scope;
+};
+
 Pseudocode.Node.prototype.wrapChild = function(rawNode) {
   return Pseudocode.Node.wrap(rawNode, this);
 };
@@ -128,7 +134,7 @@ Pseudocode.Node.prototype.adjustDepth = function(amount) {
 };
 
 Pseudocode.Node.prototype.toString = function() {
-  return 'Pseudocode.' + this.node.type;
+  return 'Pseudocode.' + this.type;
 };
 
 Pseudocode.Node.prototype.output = function(output, content, depth) {
@@ -198,6 +204,10 @@ Pseudocode.FunctionDeclaration = nodeType({
   rawChildren: function() {
     // body is a block statement
     return [this.node.body];
+  },
+
+  childScope: function() {
+    return this;
   }
 });
 
