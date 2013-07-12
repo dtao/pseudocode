@@ -60,7 +60,7 @@ Pseudocode.Node.inherit = function(functions) {
 };
 
 Pseudocode.Node.wrap = function(rawNode, parent) {
-  if (typeof rawNode !== 'object' || typeof rawNode.type === 'undefined') {
+  if (!rawNode || typeof rawNode !== 'object' || typeof rawNode.type === 'undefined') {
     return rawNode;
   }
 
@@ -90,8 +90,8 @@ Pseudocode.Node.prototype.wrapProperties = function() {
   Lazy(args).each(function(prop) {
     var propertyToWrap = self.node[prop];
     self[prop] = propertyToWrap instanceof Array ?
-      new Pseudocode.NodeCollection(propertyToWrap) :
-      Pseudocode.Node.wrap(propertyToWrap);
+      new Pseudocode.NodeCollection(propertyToWrap, self) :
+      Pseudocode.Node.wrap(propertyToWrap, self);
   });
 };
 
@@ -99,12 +99,29 @@ Pseudocode.Node.prototype.eachChild = function(fn) {
   Lazy(this.children).each(fn);
 };
 
+Pseudocode.Node.prototype.eachDescendent = function(fn) {
+  Lazy(this.children).each(function(child) {
+    fn(child);
+    child.eachDescendent(fn);
+  });
+};
+
+Pseudocode.Node.prototype.adjustDepth = function(amount) {
+  var self = this;
+
+  this.depth += amount;
+  this.eachDescendent(function(child) {
+    child.depth = child.parent.childDepth();
+  });
+};
+
 Pseudocode.Node.prototype.toString = function() {
   return 'Pseudocode.' + this.node.type;
 };
 
-Pseudocode.Node.prototype.output = function(output, content) {
-  output.out(content, this.depth);
+Pseudocode.Node.prototype.output = function(output, content, depth) {
+  depth = typeof depth === 'number' ? depth : this.depth;
+  output.out(content, depth);
 };
 
 Pseudocode.Expression = nodeType();
@@ -125,8 +142,11 @@ Pseudocode.Expression.inherit = function(properties) {
   return ctor;
 };
 
-Pseudocode.NodeCollection = function(array) {
-  this.nodes  = Lazy(array).map(Pseudocode.Node.wrap).toArray();
+Pseudocode.NodeCollection = function(array, parent) {
+  this.nodes = Lazy(array).map(function(node) {
+    return Pseudocode.Node.wrap(node, parent);
+  }).toArray();
+
   this.length = this.nodes.length;
 };
 
@@ -207,6 +227,10 @@ Pseudocode.ForStatement = nodeType({
 });
 
 Pseudocode.IfStatement = nodeType({
+  initialize: function() {
+    this.wrapProperties('test', 'consequent', 'alternate');
+  },
+
   rawChildren: function() {
     var children = [this.node.consequent];
     if (this.node.alternate) {
@@ -217,6 +241,10 @@ Pseudocode.IfStatement = nodeType({
 });
 
 Pseudocode.WhileStatement = nodeType({
+  initialize: function() {
+    this.wrapProperties('test');
+  },
+
   rawChildren: function() {
     // body is a block statement
     return [this.node.body];
@@ -229,13 +257,21 @@ Pseudocode.ExpressionStatement = nodeType({
   }
 });
 
-Pseudocode.ReturnStatement = nodeType();
+Pseudocode.ReturnStatement = nodeType({
+  initialize: function() {
+    this.wrapProperties('argument');
+  }
+});
 
 Pseudocode.Literal = exprType(['value']);
 
 Pseudocode.Identifier = exprType(['name']);
 
+Pseudocode.AssignmentExpression = exprType(['operator', 'left', 'right']);
+
 Pseudocode.BinaryExpression = exprType(['operator', 'left', 'right']);
+
+Pseudocode.ConditionalExpression = exprType(['test', 'consequent', 'alternate']);
 
 Pseudocode.UpdateExpression = exprType(['operator', 'argument', 'prefix']);
 
