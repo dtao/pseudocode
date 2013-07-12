@@ -40,13 +40,13 @@ Pseudocode.Node.inherit = function(functions) {
     var self      = this;
     self.node     = rawNode;
     self.parent   = parent;
-    self.depth    = (parent && parent.depth + 1) || 0;
+    self.depth    = (parent && parent.childDepth()) || 0;
     self.children = Lazy(self.rawChildren()).map(function(rawNode) {
-      return Pseudocode.Node.wrap(rawNode);
+      return self.wrapChild(rawNode);
     }).toArray();
 
-    if (typeof self.init === 'function') {
-      self.init();
+    if (typeof self.initialize === 'function') {
+      self.initialize();
     }
   };
 
@@ -59,19 +59,31 @@ Pseudocode.Node.inherit = function(functions) {
   return ctor;
 };
 
-Pseudocode.Node.wrap = function(rawNode) {
+Pseudocode.Node.wrap = function(rawNode, parent) {
+  if (typeof rawNode !== 'object' || typeof rawNode.type === 'undefined') {
+    return rawNode;
+  }
+
   var ctor = Pseudocode[rawNode.type];
   if (typeof ctor !== 'function') {
-    Pseudocode.NodeException('Unknown node type ' + rawNode.Type, rawNode);
+    Pseudocode.NodeException('Unknown node type ' + rawNode.type, rawNode);
   }
-  return new ctor(rawNode, this);
+  return new ctor(rawNode, parent);
 };
 
 Pseudocode.Node.prototype.rawChildren = function() {
   return [];
 };
 
-Pseudocode.Node.prototype.wrap = function() {
+Pseudocode.Node.prototype.childDepth = function() {
+  return this.depth + 1;
+};
+
+Pseudocode.Node.prototype.wrapChild = function(rawNode) {
+  return Pseudocode.Node.wrap(rawNode, this);
+};
+
+Pseudocode.Node.prototype.wrapProperties = function() {
   var self = this,
       args = Array.prototype.slice.call(arguments);
 
@@ -79,7 +91,7 @@ Pseudocode.Node.prototype.wrap = function() {
     var propertyToWrap = self.node[prop];
     self[prop] = propertyToWrap instanceof Array ?
       new Pseudocode.NodeCollection(propertyToWrap) :
-      Pseudocode.Expression.wrap(propertyToWrap);
+      Pseudocode.Node.wrap(propertyToWrap);
   });
 };
 
@@ -104,21 +116,13 @@ Pseudocode.Expression.inherit = function(properties) {
     self.parent   = parent;
 
     Lazy(properties).each(function(prop) {
-      self[prop] = rawNode[prop];
+      self.wrapProperties(prop);
     });
   };
 
   ctor.prototype = new Pseudocode.Expression();
 
   return ctor;
-};
-
-Pseudocode.Expression.wrap = function(rawNode) {
-  var ctor = Pseudocode[rawNode.type];
-  if (typeof ctor !== 'function') {
-    Pseudocode.NodeException('Unknown expression type: ' + rawNode.type, rawNode);
-  }
-  return new ctor(rawNode, this);
 };
 
 Pseudocode.NodeCollection = function(array) {
@@ -147,12 +151,16 @@ Pseudocode.NodeException = function(message, rawNode) {
 Pseudocode.Program = nodeType({
   rawChildren: function() {
     return this.node.body;
+  },
+
+  childDepth: function() {
+    return 0;
   }
 });
 
 Pseudocode.FunctionDeclaration = nodeType({
-  init: function() {
-    this.wrap('id', 'params');
+  initialize: function() {
+    this.wrapProperties('id', 'params');
   },
 
   rawChildren: function() {
@@ -164,24 +172,37 @@ Pseudocode.FunctionDeclaration = nodeType({
 Pseudocode.BlockStatement = nodeType({
   rawChildren: function() {
     return this.node.body;
+  },
+
+  childDepth: function() {
+    return this.depth;
   }
 });
 
 Pseudocode.VariableDeclaration = nodeType({
   rawChildren: function() {
     return this.node.declarations;
+  },
+
+  childDepth: function() {
+    return this.depth;
   }
 });
 
 Pseudocode.VariableDeclarator = nodeType({
-  init: function() {
-    this.wrap('id', 'init');
+  initialize: function() {
+    this.wrapProperties('id', 'init');
   }
 });
 
 Pseudocode.ForStatement = nodeType({
+  initialize: function() {
+    this.wrapProperties('init', 'test', 'update');
+  },
+
   rawChildren: function() {
-    return this.body;
+    // body is a block statement
+    return [this.node.body];
   }
 });
 
@@ -202,15 +223,27 @@ Pseudocode.WhileStatement = nodeType({
   }
 });
 
-Pseudocode.ExpressionStatement = nodeType();
+Pseudocode.ExpressionStatement = nodeType({
+  initialize: function() {
+    this.wrapProperties('expression');
+  }
+});
 
 Pseudocode.ReturnStatement = nodeType();
 
+Pseudocode.Literal = exprType(['value']);
+
 Pseudocode.Identifier = exprType(['name']);
+
+Pseudocode.BinaryExpression = exprType(['operator', 'left', 'right']);
+
+Pseudocode.UpdateExpression = exprType(['operator', 'argument', 'prefix']);
 
 Pseudocode.CallExpression = exprType(['callee', 'arguments']);
 
-Pseudocode.MemberExpression = exprType(['object', 'property']);
+Pseudocode.MemberExpression = exprType(['object', 'property', 'computed']);
+
+Pseudocode.ArrayExpression = exprType(['elements']);
 
 // convenience methods
 function nodeType(functions) {
