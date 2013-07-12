@@ -21,6 +21,12 @@ Pseudocode.fromJavaScript = function(js) {
   return new Pseudocode(ast);
 };
 
+Pseudocode.prototype.outputToFile = function(filePath, callback) {
+  var stream = fs.createWriteStream(filePath, { encoding: 'utf-8' });
+  callback(new outputs.Stream(stream));
+  stream.end();
+};
+
 function inferLanguageFromExtension(filePath) {
   switch (path.extname(filePath)) {
     case '.js':
@@ -37,11 +43,17 @@ Pseudocode.Node.inherit = function(functions) {
   functions = functions || {};
 
   var ctor = function(rawNode, parent) {
-    var self      = this;
-    self.node     = rawNode;
-    self.parent   = parent;
-    self.depth    = (parent && parent.childDepth()) || 0;
-    self.children = Lazy(self.rawChildren()).map(function(rawNode) {
+    var self    = this;
+    self.node   = rawNode;
+    self.parent = parent;
+    self.depth  = parent && parent.childDepth() || 0;
+
+    var rawChildren = self.rawChildren();
+    if (!rawChildren) {
+      Pseudocode.NodeException('rawChildren is not an array', rawNode);
+    }
+
+    self.children = Lazy(rawChildren).map(function(rawNode) {
       return self.wrapChild(rawNode);
     }).toArray();
 
@@ -251,6 +263,30 @@ Pseudocode.WhileStatement = nodeType({
   }
 });
 
+Pseudocode.SwitchStatement = nodeType({
+  initialize: function() {
+    this.wrapProperties('discriminant');
+  },
+
+  rawChildren: function() {
+    return this.node.cases;
+  },
+
+  childDepth: function() {
+    return this.depth;
+  }
+});
+
+Pseudocode.SwitchCase = nodeType({
+  initialize: function() {
+    this.wrapProperties('test');
+  },
+
+  rawChildren: function() {
+    return this.node.consequent;
+  }
+});
+
 Pseudocode.ExpressionStatement = nodeType({
   initialize: function() {
     this.wrapProperties('expression');
@@ -263,31 +299,41 @@ Pseudocode.ReturnStatement = nodeType({
   }
 });
 
-Pseudocode.Literal = exprType(['value']);
+Pseudocode.Literal = exprType('value');
 
-Pseudocode.Identifier = exprType(['name']);
+Pseudocode.Identifier = exprType('name');
 
-Pseudocode.AssignmentExpression = exprType(['operator', 'left', 'right']);
+Pseudocode.AssignmentExpression = exprType('operator', 'left', 'right');
 
-Pseudocode.BinaryExpression = exprType(['operator', 'left', 'right']);
+Pseudocode.UnaryExpression = exprType('operator', 'argument', 'prefix');
 
-Pseudocode.ConditionalExpression = exprType(['test', 'consequent', 'alternate']);
+Pseudocode.BinaryExpression = exprType('operator', 'left', 'right');
 
-Pseudocode.UpdateExpression = exprType(['operator', 'argument', 'prefix']);
+Pseudocode.ConditionalExpression = exprType('test', 'consequent', 'alternate');
 
-Pseudocode.CallExpression = exprType(['callee', 'arguments']);
+Pseudocode.LogicalExpression = exprType('operator', 'left', 'right');
 
-Pseudocode.MemberExpression = exprType(['object', 'property', 'computed']);
+Pseudocode.UpdateExpression = exprType('operator', 'argument', 'prefix');
 
-Pseudocode.ArrayExpression = exprType(['elements']);
+Pseudocode.ThisExpression = exprType();
+
+Pseudocode.CallExpression = exprType('callee', 'arguments');
+
+Pseudocode.MemberExpression = exprType('object', 'property', 'computed');
+
+Pseudocode.ArrayExpression = exprType('elements');
+
+Pseudocode.ObjectExpression = exprType('properties');
+
+Pseudocode.FunctionExpression = exprType('id', 'params', 'body');
 
 // convenience methods
 function nodeType(functions) {
   return Pseudocode.Node.inherit(functions);
 }
 
-function exprType(properties) {
-  return Pseudocode.Expression.inherit(properties);
+function exprType() {
+  return Pseudocode.Expression.inherit(Array.prototype.slice.call(arguments));
 }
 
 module.exports = Pseudocode;

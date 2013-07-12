@@ -1,16 +1,23 @@
-var fs = require('fs');
-var js = fs.readFileSync('samples/countingSort.js', 'utf-8')
+var fs       = require('fs');
+var path     = require('path');
+var folder   = 'samples';
+var fileName = path.join(folder, 'set.js');
+var js       = fs.readFileSync(fileName, 'utf-8')
 
 var Pseudocode = require('./pseudocode.js');
+var translate  = require('./lib/translate.js');
 require('./lib/ruby.js');
 
-console.log('JavaScript (original)');
+console.log('JavaScript (original):');
 console.log(js);
 
-console.log('');
-console.log('Ruby');
-Pseudocode.fromJavaScript(js).outputRuby();
+var pseudocode = Pseudocode.fromJavaScript(js);
 
-// console.log('');
-// console.log('C#');
-// Pseudocode.fromJavaScript(js).outputCSharp();
+console.log('');
+console.log('Ruby:');
+pseudocode.outputRuby();
+
+// var rubyFileName = path.basename(fileName, path.extname(fileName))
+// rubyFileName = translate.fromCamelCase(rubyFileName).toSnakeCase() + '.rb';
+// pseudocode.outputRubyToFile(path.join(folder, rubyFileName));
+// console.log('Saved Ruby to ' + rubyFileName);
