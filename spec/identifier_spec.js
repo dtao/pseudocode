@@ -5,12 +5,12 @@ var bool    = true;
 
 require('./spec_helper.js');
 
-describe('Pseudocode.Literal', function() {
+describe('Pseudocode.Identifier', function() {
   var pseudocode = loadFile(__filename);
 
   function typeOfChild(index) {
     var child = pseudocode.program.children[index];
-    return child.children[0].init.dataType;
+    return child.children[0].id.inferType();
   }
 
   it('infers the type of string literals', function() {

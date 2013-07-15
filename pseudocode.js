@@ -142,10 +142,6 @@ Pseudocode.Node.prototype.output = function(output, content, depth) {
   output.out(content, depth);
 };
 
-Pseudocode.Node.prototype.inferType = function() {
-  Pseudocode.NodeException(this + ' has no inferType method', this.node);
-};
-
 Pseudocode.Node.prototype.inferredType = function() {
   var cachedInferredType = this.cachedInferredType;
 
@@ -163,27 +159,58 @@ Pseudocode.Node.prototype.inferredType = function() {
   return this.cachedInferredType;
 };
 
-Pseudocode.Node.prototype.getTypeForIdentifier = function(name) {
-  return this.scope.inferredTypes && this.scope.inferredTypes[name];
+Pseudocode.Node.prototype.getTypeForIdentifier = function(id) {
+  if (!id.scope.inferredTypes) {
+    return undefined;
+  }
+
+  var typeList = id.scope.inferredTypes[id.name];
+  if (!typeList) {
+    return undefined;
+  }
+
+  return typeList.length === 1 && typeList[0];
+};
+
+Pseudocode.Node.prototype.registerTypeForIdentifer = function(id, type) {
+  var inferredTypes = id.scope.inferredTypes;
+  if (!inferredTypes) {
+    inferredTypes = id.scope.inferredTypes = {};
+  }
+
+  var typeList = inferredTypes[id.name];
+  if (!typeList) {
+    typeList = inferredTypes[id.name] = [];
+  }
+
+  if (arrayIndexOf(typeList, type) === -1) {
+    typeList.push(type);
+  }
 };
 
 Pseudocode.Expression = nodeType();
 
 Pseudocode.Expression.inherit = function(properties) {
   var ctor = function(rawNode, parent) {
-    var self      = this;
-    self.node     = rawNode;
-    self.type     = rawNode && rawNode.type;
-    self.parent   = parent;
+    var self    = this;
+    self.node   = rawNode;
+    self.type   = rawNode && rawNode.type;
+    self.parent = parent;
 
     Lazy(properties).each(function(prop) {
       self.wrapProperties(prop);
     });
+
+    self.dataType = self.inferType();
   };
 
   ctor.prototype = new Pseudocode.Expression();
 
   return ctor;
+};
+
+Pseudocode.Expression.prototype.inferType = function() {
+  Pseudocode.NodeException(this + ' has no inferType method', this.node);
 };
 
 Pseudocode.NodeCollection = function(array, parent) {
@@ -281,6 +308,7 @@ Pseudocode.VariableDeclaration = nodeType({
 Pseudocode.VariableDeclarator = nodeType({
   initialize: function() {
     this.wrapProperties('id', 'init');
+    this.registerTypeForIdentifer(this.id, this.init.dataType);
   }
 });
 
@@ -373,7 +401,7 @@ Pseudocode.Literal.prototype.inferType = function() {
       if (this.value instanceof Array) {
         return inferArrayType(this.value);
       } else {
-        return inferObjectType(this.value);
+        return 'object';
       }
   }
 }
@@ -381,10 +409,18 @@ Pseudocode.Literal.prototype.inferType = function() {
 Pseudocode.Identifier = exprType('name');
 
 Pseudocode.Identifier.prototype.inferType = function() {
-  return this.getTypeForIdentifier(this.name) || 'var';
+  return this.getTypeForIdentifier(this) || 'object';
 };
 
 Pseudocode.AssignmentExpression = exprType('operator', 'left', 'right');
+
+Pseudocode.AssignmentExpression.prototype.inferType = function() {
+  var type = this.init.dataType;
+  if (this.left.type === 'Identifier') {
+    this.registerTypeForIdentifer(this.left, type);
+  }
+  return type;
+};
 
 Pseudocode.UnaryExpression = exprType('operator', 'argument', 'prefix');
 
@@ -400,13 +436,33 @@ Pseudocode.ThisExpression = exprType();
 
 Pseudocode.CallExpression = exprType('callee', 'arguments');
 
+Pseudocode.CallExpression.prototype.inferType = function() {
+  var functionType = this.getTypeForIdentifier(this.callee);
+  return functionType ? functionType.returnType : 'object';
+};
+
 Pseudocode.MemberExpression = exprType('object', 'property', 'computed');
+
+Pseudocode.MemberExpression.prototype.inferType = function() {
+  switch (this.property.name) {
+    case 'count':
+    case 'length':
+      return 'int';
+
+    default:
+      return 'object';
+  }
+};
 
 Pseudocode.ArrayExpression = exprType('elements');
 
 Pseudocode.ObjectExpression = exprType('properties');
 
 Pseudocode.FunctionExpression = exprType('id', 'params', 'body');
+
+Pseudocode.FunctionExpression.prototype.inferType = function() {
+  return 'object';
+};
 
 // convenience methods
 function nodeType(functions) {
@@ -415,6 +471,16 @@ function nodeType(functions) {
 
 function exprType() {
   return Pseudocode.Expression.inherit(Array.prototype.slice.call(arguments));
+}
+
+function arrayIndexOf(array, element) {
+  for (var i = 0; i < array.length; ++i) {
+    if (array[i] === element) {
+      return i;
+    }
+  }
+
+  return -1;
 }
 
 module.exports = Pseudocode;
