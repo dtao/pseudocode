@@ -142,12 +142,38 @@ Pseudocode.Node.prototype.output = function(output, content, depth) {
   output.out(content, depth);
 };
 
+Pseudocode.Node.prototype.inferType = function() {
+  Pseudocode.NodeException(this + ' has no inferType method', this.node);
+};
+
+Pseudocode.Node.prototype.inferredType = function() {
+  var cachedInferredType = this.cachedInferredType;
+
+  if (typeof cachedInferredType === 'undefined') {
+    cachedInferredType = this.inferType();
+
+    if (cachedInferredType && this.id) {
+      this.scope.inferredTypes = this.scope.inferredTypes || {};
+      this.scope.inferredTypes[this.id.name] = cachedInferredType;
+    }
+
+    this.cachedInferredType = cachedInferredType;
+  }
+
+  return this.cachedInferredType;
+};
+
+Pseudocode.Node.prototype.getTypeForIdentifier = function(name) {
+  return this.scope.inferredTypes && this.scope.inferredTypes[name];
+};
+
 Pseudocode.Expression = nodeType();
 
 Pseudocode.Expression.inherit = function(properties) {
   var ctor = function(rawNode, parent) {
     var self      = this;
     self.node     = rawNode;
+    self.type     = rawNode && rawNode.type;
     self.parent   = parent;
 
     Lazy(properties).each(function(prop) {
@@ -199,6 +225,7 @@ Pseudocode.Program = nodeType({
 Pseudocode.FunctionDeclaration = nodeType({
   initialize: function() {
     this.wrapProperties('id', 'params');
+    this.id.target = this;
   },
 
   rawChildren: function() {
@@ -208,6 +235,26 @@ Pseudocode.FunctionDeclaration = nodeType({
 
   childScope: function() {
     return this;
+  },
+
+  inferType: function() {
+    var possibleReturnTypes = [];
+
+    this.eachDescendent(function(node) {
+      if (node.type === 'ReturnStatement' && node.argument) {
+        if (node.argument.inferredType()) {
+          possibleReturnTypes.push(node.argument.inferredType());
+        }
+      }
+    });
+
+    possibleReturnTypes = Lazy(possibleReturnTypes).uniq().toArray();
+
+    if (possibleReturnTypes.length === 1) {
+      return possibleReturnTypes[0];
+    }
+
+    return false;
   }
 });
 
@@ -311,7 +358,31 @@ Pseudocode.ReturnStatement = nodeType({
 
 Pseudocode.Literal = exprType('value');
 
+Pseudocode.Literal.prototype.inferType = function() {
+  switch (typeof this.value) {
+    case 'string':
+      return 'string';
+
+    case 'number':
+      return (/\./).test(this.value.toString()) ? 'double' : 'int';
+
+    case 'boolean':
+      return 'bool';
+
+    default:
+      if (this.value instanceof Array) {
+        return inferArrayType(this.value);
+      } else {
+        return inferObjectType(this.value);
+      }
+  }
+}
+
 Pseudocode.Identifier = exprType('name');
+
+Pseudocode.Identifier.prototype.inferType = function() {
+  return this.getTypeForIdentifier(this.name) || 'var';
+};
 
 Pseudocode.AssignmentExpression = exprType('operator', 'left', 'right');
 
