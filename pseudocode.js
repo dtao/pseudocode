@@ -217,6 +217,10 @@ Pseudocode.Node.prototype.registerTypeForIdentifer = function(id, type) {
   }
 };
 
+Pseudocode.Node.prototype.getIdentifiers = function() {
+  return this.scope.inferredTypes ? Object.keys(this.scope.inferredTypes) : [];
+};
+
 Pseudocode.Expression = nodeType();
 
 Pseudocode.Expression.inherit = function(properties) {
@@ -281,7 +285,12 @@ Pseudocode.Program = nodeType({
 Pseudocode.FunctionDeclaration = nodeType({
   initialize: function() {
     this.wrapProperties('id', 'params');
-    this.id.target = this;
+
+    var returnType = this.inferReturnType() || 'void';
+    this.registerTypeForIdentifer(this.id, {
+      paramTypes: Lazy(this.params).pluck('dataType'),
+      returnType: returnType
+    });
   },
 
   rawChildren: function() {
@@ -293,7 +302,7 @@ Pseudocode.FunctionDeclaration = nodeType({
     return this;
   },
 
-  inferType: function() {
+  inferReturnType: function() {
     var possibleReturnTypes = [];
 
     this.eachDescendent(function(node) {
@@ -337,7 +346,9 @@ Pseudocode.VariableDeclaration = nodeType({
 Pseudocode.VariableDeclarator = nodeType({
   initialize: function() {
     this.wrapProperties('id', 'init');
-    this.registerTypeForIdentifer(this.id, this.init.dataType);
+    if (this.init) {
+      this.registerTypeForIdentifer(this.id, this.init.dataType);
+    }
   }
 });
 
@@ -444,7 +455,7 @@ Pseudocode.Identifier.prototype.inferType = function() {
 Pseudocode.AssignmentExpression = exprType('operator', 'left', 'right');
 
 Pseudocode.AssignmentExpression.prototype.inferType = function() {
-  var type = this.init.dataType;
+  var type = this.right.dataType;
   if (this.left.type === 'Identifier') {
     this.registerTypeForIdentifer(this.left, type);
   }
@@ -455,7 +466,19 @@ Pseudocode.UnaryExpression = exprType('operator', 'argument', 'prefix');
 
 Pseudocode.BinaryExpression = exprType('operator', 'left', 'right');
 
+Pseudocode.BinaryExpression.prototype.inferType = function() {
+  var leftType = this.left.dataType;
+  var rightType = this.right.dataType;
+  return leftType === rightType ? leftType : 'object';
+};
+
 Pseudocode.ConditionalExpression = exprType('test', 'consequent', 'alternate');
+
+Pseudocode.ConditionalExpression.prototype.inferType = function() {
+  var consequentType = this.consequent.dataType;
+  var alternateType = this.alternate.dataType;
+  return consequentType === alternateType ? consequentType : 'object';
+};
 
 Pseudocode.LogicalExpression = exprType('operator', 'left', 'right');
 
