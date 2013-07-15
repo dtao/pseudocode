@@ -188,12 +188,14 @@ Pseudocode.Node.prototype.inferredType = function() {
   return this.cachedInferredType;
 };
 
-Pseudocode.Node.prototype.getTypeForIdentifier = function(id) {
-  if (!id.scope.inferredTypes) {
+function getTypeForIdentifier(id, scope) {
+  scope = scope || id.scope;
+
+  if (!scope.inferredTypes) {
     return undefined;
   }
 
-  var typeList = id.scope.inferredTypes[id.name];
+  var typeList = scope.inferredTypes[id.name];
   if (!typeList) {
     return undefined;
   }
@@ -201,10 +203,12 @@ Pseudocode.Node.prototype.getTypeForIdentifier = function(id) {
   return typeList.length === 1 && typeList[0];
 };
 
-Pseudocode.Node.prototype.registerTypeForIdentifer = function(id, type) {
-  var inferredTypes = id.scope.inferredTypes;
+function registerTypeForIdentifer(id, type, scope) {
+  scope = scope || id.scope;
+
+  var inferredTypes = scope.inferredTypes;
   if (!inferredTypes) {
-    inferredTypes = id.scope.inferredTypes = {};
+    inferredTypes = scope.inferredTypes = {};
   }
 
   var typeList = inferredTypes[id.name];
@@ -217,8 +221,32 @@ Pseudocode.Node.prototype.registerTypeForIdentifer = function(id, type) {
   }
 };
 
+function registerNodeForIdentifier(id, node, scope) {
+  scope = scope || id.scope;
+
+  var registeredNodes = scope.registeredNodes;
+  if (!registeredNodes) {
+    registeredNodes = scope.registeredNodes = {};
+  }
+
+  var existingNode = registeredNodes[id.name];
+  if (existingNode && existingNode !== node) {
+    // TODO: figure out why this seems to get triggered when it shouldn't
+    // Pseudocode.NodeException('Node already exists for identifier ' + id.name, node.node);
+  }
+
+  registeredNodes[id.name] = node;
+}
+
 Pseudocode.Node.prototype.getIdentifiers = function() {
-  return this.scope.inferredTypes ? Object.keys(this.scope.inferredTypes) : [];
+  // TODO: make this not so horribly inefficient
+  return Lazy(Object.keys(this.childScope().inferredTypes || {}))
+    .concat(Object.keys(this.childScope().registeredNodes || {}))
+    .uniq().toArray();
+};
+
+Pseudocode.Node.prototype.getNodeForIdentifier = function(identifier) {
+  return this.childScope().registeredNodes && this.childScope().registeredNodes[identifier];
 };
 
 Pseudocode.Expression = nodeType();
@@ -229,6 +257,7 @@ Pseudocode.Expression.inherit = function(properties) {
     self.node   = rawNode;
     self.type   = rawNode && rawNode.type;
     self.parent = parent;
+    self.scope  = parent && parent.childScope();
 
     Lazy(properties).each(function(prop) {
       self.wrapProperties(prop);
@@ -268,7 +297,7 @@ Pseudocode.NodeCollection.prototype.toString = function() {
 
 Pseudocode.NodeException = function(message, rawNode) {
   throw message + ':\n' +
-    'Keys: ' + Object.keys(rawNode) + '\n' +
+    'Keys: ' + Object.keys(rawNode).join(', ') + '\n' +
     JSON.stringify(rawNode, null, 2).substring(0, 250) + '...';
 };
 
@@ -284,13 +313,22 @@ Pseudocode.Program = nodeType({
 
 Pseudocode.FunctionDeclaration = nodeType({
   initialize: function() {
-    this.wrapProperties('id', 'params');
+    var self = this;
 
-    var returnType = this.inferReturnType() || 'void';
-    this.registerTypeForIdentifer(this.id, {
-      paramTypes: Lazy(this.params).pluck('dataType'),
-      returnType: returnType
+    self.wrapProperties('id', 'params');
+
+    self.params.each(function(param) {
+      console.log('Registering ' + param.name);
+      registerNodeForIdentifier(param, self);
     });
+
+    self.returnType = self.inferReturnType() || 'void';
+    registerTypeForIdentifer(self.id, {
+      paramTypes: Lazy(self.params).pluck('dataType'),
+      returnType: self.returnType
+    }, self.parent.scope);
+
+    registerNodeForIdentifier(self.id, self, self.parent.scope);
   },
 
   rawChildren: function() {
@@ -347,7 +385,7 @@ Pseudocode.VariableDeclarator = nodeType({
   initialize: function() {
     this.wrapProperties('id', 'init');
     if (this.init) {
-      this.registerTypeForIdentifer(this.id, this.init.dataType);
+      registerTypeForIdentifer(this.id, this.init.dataType);
     }
   }
 });
@@ -449,7 +487,7 @@ Pseudocode.Literal.prototype.inferType = function() {
 Pseudocode.Identifier = exprType('name');
 
 Pseudocode.Identifier.prototype.inferType = function() {
-  return this.getTypeForIdentifier(this) || 'object';
+  return getTypeForIdentifier(this) || 'object';
 };
 
 Pseudocode.AssignmentExpression = exprType('operator', 'left', 'right');
@@ -457,12 +495,26 @@ Pseudocode.AssignmentExpression = exprType('operator', 'left', 'right');
 Pseudocode.AssignmentExpression.prototype.inferType = function() {
   var type = this.right.dataType;
   if (this.left.type === 'Identifier') {
-    this.registerTypeForIdentifer(this.left, type);
+    registerTypeForIdentifer(this.left, type);
   }
   return type;
 };
 
 Pseudocode.UnaryExpression = exprType('operator', 'argument', 'prefix');
+
+Pseudocode.UnaryExpression.prototype.inferType = function() {
+  switch (this.operator) {
+    case 'typeof':
+      return 'string';
+
+    case '-':
+    case '+':
+      return 'int';
+
+    default:
+      return 'object';
+  }
+}
 
 Pseudocode.BinaryExpression = exprType('operator', 'left', 'right');
 
@@ -482,9 +534,28 @@ Pseudocode.ConditionalExpression.prototype.inferType = function() {
 
 Pseudocode.LogicalExpression = exprType('operator', 'left', 'right');
 
+Pseudocode.LogicalExpression.prototype.inferType = function() {
+  return 'bool';
+};
+
 Pseudocode.UpdateExpression = exprType('operator', 'argument', 'prefix');
 
+Pseudocode.UpdateExpression.prototype.inferType = function() {
+  switch (this.operator) {
+    case '--':
+    case '++':
+      return 'int';
+
+    default:
+      Pseudocode.NodeException('Unknown operator: ' + this.operator, this.node);
+  }
+};
+
 Pseudocode.ThisExpression = exprType();
+
+Pseudocode.ThisExpression.prototype.inferType = function() {
+  return 'object';
+};
 
 Pseudocode.CallExpression = exprType('callee', 'arguments');
 
@@ -513,6 +584,10 @@ Pseudocode.MemberExpression.prototype.inferType = function() {
 
 Pseudocode.ArrayExpression = exprType('elements');
 
+Pseudocode.ArrayExpression.prototype.inferType = function() {
+
+};
+
 Pseudocode.ObjectExpression = exprType('properties');
 
 Pseudocode.ObjectExpression.prototype.inferType = function() {
@@ -530,6 +605,16 @@ Pseudocode.FunctionExpression = exprType('id', 'params', 'body');
 Pseudocode.FunctionExpression.prototype.inferType = function() {
   return 'object';
 };
+
+// helper methods
+function inferArrayType(array) {
+  var elementTypes = Lazy(array.elements.nodes).pluck('dataType').uniq();
+
+  return {
+    collectionType: 'array',
+    elementType: elementTypes.length === 1 ? elementTypes[0] : 'object'
+  };
+}
 
 // convenience methods
 function nodeType(functions) {
