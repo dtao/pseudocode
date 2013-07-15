@@ -6,6 +6,35 @@ var Lazy    = require('lazy.js');
 // For supporting multiple output mechanisms (e.g., console, string)
 var outputs = require('./lib/outputs.js');
 
+// Known members!
+var membersOfKnownTypes = {
+  'string': {
+    'charAt': {
+      paramTypes: ['int'],
+      returnType: 'char'
+    },
+    'indexOf': {
+      paramTypes: ['string', 'int'],
+      returnType: 'int'
+    },
+    'substring': {
+      paramTypes: ['int', 'int'],
+      returnType: 'string'
+    },
+    'substr': {
+      paramTypes: ['int', 'int'],
+      returnType: 'string'
+    },
+    'split': {
+      paramTypes: ['string'],
+      returnType: {
+        collectionType: 'array',
+        elementType: 'string'
+      }
+    }
+  }
+};
+
 function Pseudocode(ast) {
   this.program = new Pseudocode.Program(ast);
 }
@@ -437,13 +466,18 @@ Pseudocode.ThisExpression = exprType();
 Pseudocode.CallExpression = exprType('callee', 'arguments');
 
 Pseudocode.CallExpression.prototype.inferType = function() {
-  var functionType = this.getTypeForIdentifier(this.callee);
+  var functionType = this.callee.dataType;
   return functionType ? functionType.returnType : 'object';
 };
 
 Pseudocode.MemberExpression = exprType('object', 'property', 'computed');
 
 Pseudocode.MemberExpression.prototype.inferType = function() {
+  var membersOfKnownType = membersOfKnownTypes[this.object.dataType];
+  if (membersOfKnownType && membersOfKnownType[this.property.name]) {
+    return membersOfKnownType[this.property.name];
+  }
+
   switch (this.property.name) {
     case 'count':
     case 'length':
@@ -457,6 +491,16 @@ Pseudocode.MemberExpression.prototype.inferType = function() {
 Pseudocode.ArrayExpression = exprType('elements');
 
 Pseudocode.ObjectExpression = exprType('properties');
+
+Pseudocode.ObjectExpression.prototype.inferType = function() {
+  return 'object';
+};
+
+Pseudocode.Property = exprType('key', 'value', 'kind');
+
+Pseudocode.Property.prototype.inferType = function() {
+  return this.value.inferType();
+};
 
 Pseudocode.FunctionExpression = exprType('id', 'params', 'body');
 
