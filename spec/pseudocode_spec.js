@@ -7,17 +7,17 @@ describe('Pseudocode', function() {
     it('provides a list of the identifiers under a given scope', function() {
       expect(binarySearch.getIdentifiers()).toEqual(['binarySearch']);
     });
-  });
 
-  xit('provides access to all of the nodes in a program', function() {
-    // expect(binarySearch.getScopes()).toEqual([
-    //   'binarySearch', 'function', [
-    //     ['haystack', 'array'],
-    //     ['needle', 'object'],
-    //     ['low', 'int'],
-    //     ['high', 'int'],
-    //     ['current', 'int']
-    //   ]
-    // ]);
+    it('provides recursive access to all of the identifiers in a program', function() {
+      expect(binarySearch.getIdentifiers(true)).toEqual([
+        ['binarySearch', 'function', [
+          ['haystack', 'array'],
+          ['needle', 'object'],
+          ['low', 'int'],
+          ['high', 'int'],
+          ['current', 'int']]
+        ]
+      ]);
+    });
   });
 });

@@ -47,25 +47,33 @@ Pseudocode.Node.define = function(name, functions) {
     self.rawNode = rawNode;
     self.type    = rawNode && rawNode.type;
     self.parent  = parent;
-    self.scope   = parent && parent.childScope() || new Pseudocode.Scope();
+    self.scope   = parent && parent.getChildScope() || new Pseudocode.Scope();
 
-    var rawChildren = self.rawChildren();
-    if (!(rawChildren instanceof Array)) {
-      self.fail('rawChildren returned a(n) ' + typeof rawChildren +
-        ' instead of an array', rawChildren);
-    }
-
-    // This might not be the best idea, but...
-    self.children = Lazy(rawChildren)
-      .map(function(child) { return self.wrapChild(child); })
-      .toArray();
-
-    // ...any properties that we haven't already absorbed
-    // we'll now add directly.
-    Lazy(rawNode).each(function(value, property) {
-      if (!(property in self)) {
-        self[property] = value;
+    var children = [];
+    var childSelectors = self.getChildSelectors();
+    Lazy(childSelectors).each(function(selector) {
+      var child = rawNode[selector];
+      if (!child) {
+        return;
       }
+
+      if (child instanceof Array) {
+        self[selector] = Lazy(child)
+          .map(function(rawChild) { return self.wrapChild(rawChild); })
+          .toArray();
+
+        children = children.concat(self[selector]);
+
+      } else {
+        self[selector] = self.wrapChild(child);
+        children.push(self[selector]);
+      }
+    });
+
+    self.children = children;
+
+    Lazy(rawNode).keys().without(childSelectors).each(function(property) {
+      self[property] = rawNode[property];
     });
 
     if (typeof self.initialize === 'function') {
@@ -116,7 +124,7 @@ Pseudocode.Node.prototype.wrapProperty = function(property) {
  *
  * @return {Pseudocode.Scope} The child scope.
  */
-Pseudocode.Node.prototype.childScope = function() {
+Pseudocode.Node.prototype.getChildScope = function() {
   return this.scope;
 };
 
@@ -138,17 +146,33 @@ Pseudocode.Node.prototype.initialize = function() {
 /**
  * Returns an array of all the identifiers belonging to the scope of this node.
  *
+ * @param {boolean=} recursive Whether or not to include all of the identifiers
+ *     of this node and its child nodes recursively.
  * @return {Array} An array containing all of the identifiers.
  */
-Pseudocode.Node.prototype.getIdentifiers = function() {
-  return Lazy(this.childScope().identifiers).keys().toArray();
+Pseudocode.Node.prototype.getIdentifiers = function(recursive) {
+  if (!recursive) {
+    return Lazy(this.getChildScope().identifiers).keys().toArray();
+  }
+
+  var identifiers = [];
+  Lazy(this.getChildScope().identifiers).each(function(node, identifier) {
+    var data = [identifier, 'object'];
+    var childIdentifiers = node.getIdentifiers(true);
+    if (childIdentifiers.length > 0) {
+      data.push(childIdentifiers);
+    }
+    identifiers.push(data);
+  });
+
+  return identifiers;
 };
 
 /**
  * Creates a nested array of arrays, where for each array the first element
  * identifies a type of node the subsequent elements are the node's children.
  *
- * @return {Array} The next array of arrays.
+ * @return {Array} The nested array of arrays.
  */
 Pseudocode.Node.prototype.toArray = function() {
   return Lazy(this.children)
@@ -190,24 +214,8 @@ Pseudocode.Node.prototype.fail = function(message, node) {
 
 Lazy(astMap).each(function(selectors, name) {
   Pseudocode.Node.define(name, {
-    rawChildren: function() {
-      var rawNode     = this.rawNode,
-          rawChildren = [];
-
-      Lazy(selectors).each(function(selector) {
-        var children = rawNode[selector];
-        if (!children) {
-          return;
-        }
-
-        if (!(children instanceof Array)) {
-          children = [children];
-        }
-
-        rawChildren = rawChildren.concat(children);
-      });
-
-      return rawChildren;
+    getChildSelectors: function() {
+      return selectors;
     }
   });
 });
@@ -230,8 +238,17 @@ Pseudocode.Scope.prototype.registerIdentifier = function(identifier) {
   this.identifiers[identifier.name] = identifier;
 };
 
-Pseudocode.Identifier.prototype.initialize = function() {
-  this.scope.registerIdentifier(this);
+Pseudocode.FunctionDeclaration.prototype.getChildScope = function() {
+  return this.childScope;
+};
+
+Pseudocode.FunctionDeclaration.prototype.initialize = function() {
+  this.childScope = new Pseudocode.Scope();
+
+  this.scope.registerIdentifier(this.id);
+  Lazy(this.params).each(function(param) {
+    param.scope.registerIdentifier(param);
+  });
 };
 
 module.exports = Pseudocode;
