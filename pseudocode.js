@@ -47,7 +47,7 @@ Pseudocode.Node.define = function(name, functions) {
     self.rawNode = rawNode;
     self.type    = rawNode && rawNode.type;
     self.parent  = parent;
-    self.scope   = parent && parent.getChildScope() || new Pseudocode.Scope();
+    self.scope   = parent && parent.getChildScope() || self.createScope();
 
     var children = [];
     var childSelectors = self.getChildSelectors();
@@ -122,10 +122,20 @@ Pseudocode.Node.prototype.wrapProperty = function(property) {
  * Provides a scope that children belong to. By default, children share the same
  * scope as their parent.
  *
- * @return {Pseudocode.Scope} The child scope.
+ * @return {Pseudocode.Node} The child scope.
  */
 Pseudocode.Node.prototype.getChildScope = function() {
   return this.scope;
+};
+
+/**
+ * Establishes this node as creating a new scope.
+ *
+ * @return {Pseudocode.Node} The current node.
+ */
+Pseudocode.Node.prototype.createScope = function() {
+  this.identifiers = this.identifiers || {};
+  return this;
 };
 
 /**
@@ -144,6 +154,19 @@ Pseudocode.Node.prototype.initialize = function() {
 };
 
 /**
+ * Registers an identifier with the scope of the current node.
+ *
+ * @param {Pseudocode.Identifier} identifier The identifier to register.
+ */
+Pseudocode.Node.prototype.registerIdentifier = function(identifier) {
+  if (!this.identifiers) {
+    this.fail('no identifiers table');
+  }
+
+  this.identifiers[identifier.name] = identifier;
+};
+
+/**
  * Returns an array of all the identifiers belonging to the scope of this node.
  *
  * @param {boolean=} recursive Whether or not to include all of the identifiers
@@ -151,16 +174,20 @@ Pseudocode.Node.prototype.initialize = function() {
  * @return {Array} An array containing all of the identifiers.
  */
 Pseudocode.Node.prototype.getIdentifiers = function(recursive) {
+  var childScope = this.getChildScope();
+
   if (!recursive) {
-    return Lazy(this.getChildScope().identifiers).keys().toArray();
+    return Lazy(childScope.identifiers).keys().toArray();
   }
 
-  var identifiers = [];
-  Lazy(this.getChildScope().identifiers).each(function(node, identifier) {
+  var self = this, identifiers = [];
+  Lazy(childScope.identifiers).each(function(node, identifier) {
     var data = [identifier, 'object'];
-    var childIdentifiers = node.getIdentifiers(true);
-    if (childIdentifiers.length > 0) {
-      data.push(childIdentifiers);
+    if (node.scope !== self) {
+      var childIdentifiers = node.scope.getChildScope().getIdentifiers(true);
+      if (childIdentifiers.length > 0) {
+        data.push(childIdentifiers);
+      }
     }
     identifiers.push(data);
   });
@@ -220,31 +247,11 @@ Lazy(astMap).each(function(selectors, name) {
   });
 });
 
-/**
- * Represents a scoping context for identifiers.
- *
- * @constructor
- */
-Pseudocode.Scope = function() {
-  this.identifiers = {};
-};
-
-/**
- * Registers an identifier as belonging to the current scope.
- *
- * @param {Pseudocode.Identifier} identifier The identifier to register.
- */
-Pseudocode.Scope.prototype.registerIdentifier = function(identifier) {
-  this.identifiers[identifier.name] = identifier;
-};
-
 Pseudocode.FunctionDeclaration.prototype.getChildScope = function() {
-  return this.childScope;
+  return this.createScope();
 };
 
 Pseudocode.FunctionDeclaration.prototype.initialize = function() {
-  this.childScope = new Pseudocode.Scope();
-
   this.scope.registerIdentifier(this.id);
   Lazy(this.params).each(function(param) {
     param.scope.registerIdentifier(param);
