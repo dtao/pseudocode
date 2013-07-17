@@ -83,6 +83,8 @@ Pseudocode.Node.define = function(name, functions, baseType) {
     if (typeof self.initialize === 'function') {
       self.initialize();
     }
+
+    self.getDataType();
   };
 
   ctor.prototype = new baseType();
@@ -198,9 +200,13 @@ Pseudocode.Node.prototype.registerIdentifierType = function(identifier, dataType
     this.fail('no identifier types table');
   }
 
+  if (!dataType) {
+    this.fail('invalid data type: ' + dataType);
+  }
+
   var typeList = this.identifierTypes[identifier.name];
   if (!typeList) {
-    typeList = this.identifierTypes[identifier.name] = [];
+    typeList = this.identifierTypes[identifier.name] = new Pseudocode.SetList();
   }
 
   typeList.push(dataType);
@@ -219,14 +225,17 @@ Pseudocode.Node.prototype.getIdentifiers = function(recursive) {
   if (recursive) {
     this.eachDescendent(function(node) {
       if (node instanceof Pseudocode.Identifier) {
-        identifiers[node.name] = { dataType: node.getDataType() };
+        // Exclude member expressions.
+        if (!(node.parent instanceof Pseudocode.MemberExpression)) {
+          identifiers[node.name] = { dataType: node.getDataType() };
+        }
       }
     });
 
   } else {
     Lazy(this.children).each(function(child) {
-      if (child instanceof Pseudocode.Identifier) {
-        identifiers[child.name] = { dataType: child.getDataType() };
+      if (child.id instanceof Pseudocode.Identifier) {
+        identifiers[child.id.name] = { dataType: child.id.getDataType() };
       }
     });
   }
@@ -306,6 +315,45 @@ Pseudocode.Expression.prototype.inferDataType = function() {
   this.fail('inferDataType not implemented', this.rawNode);
 };
 
+/**
+ * An expandable list of strings without duplicates.
+ *
+ * @constructor
+ */
+Pseudocode.SetList = function() {
+  this.set    = {};
+  this.list   = [];
+  this.length = 0;
+};
+
+/**
+ * Adds a string to the list if it isn't already present.
+ *
+ * @param {string} value The value to add to the list.
+ * @return {boolean} True if the value was added, or false if it was already
+ *     present.
+ */
+Pseudocode.SetList.prototype.push = function(value) {
+  if (!this.set[value]) {
+    this.set[value] = true;
+    this.list.push(value);
+    ++this.length;
+    return true;
+  }
+
+  return false;
+};
+
+/**
+ * Gets the nth value in the list.
+ *
+ * @param {number} n The index of the value to retrieve.
+ * @return {string} The value at the nth position in the list.
+ */
+Pseudocode.SetList.prototype.get = function(n) {
+  return this.list[n];
+};
+
 Lazy(astMap.Statements).each(function(selectors, name) {
   Pseudocode.Node.define(name, {
     getChildSelectors: function() {
@@ -352,7 +400,7 @@ Pseudocode.Identifier.prototype.getDataType = function() {
 
 Pseudocode.Identifier.prototype.inferDataType = function() {
   var possibleTypes = this.scope.identifierTypes[this.name];
-  return (possibleTypes && possibleTypes.length === 1) ? possibleTypes[0] : 'object';
+  return (possibleTypes && possibleTypes.length === 1) ? possibleTypes.get(0) : 'object';
 };
 
 Pseudocode.Literal.prototype.inferDataType = function() {
@@ -363,6 +411,12 @@ Pseudocode.Literal.prototype.inferDataType = function() {
 
     default:
       this.fail('Unknown literal type: ' + typeof this.value);
+  }
+};
+
+Pseudocode.AssignmentExpression.prototype.initialize = function() {
+  if (this.left instanceof Pseudocode.Identifier) {
+    this.scope.registerIdentifierType(this.left, this.right.getDataType());
   }
 };
 
@@ -402,8 +456,23 @@ Pseudocode.BinaryExpression.prototype.inferDataType = function() {
   }
 };
 
+Pseudocode.MemberExpression.prototype.initialize = function() {
+  if (this.object instanceof Pseudocode.Identifier) {
+    if (this.computed && this.property.getDataType() === 'int') {
+      this.scope.registerIdentifierType(this.object, 'array');
+    }
+  }
+};
+
 Pseudocode.MemberExpression.prototype.inferDataType = function() {
-  return 'object';
+  switch (this.property.name) {
+    case 'count':
+    case 'length':
+      return 'int';
+
+    default:
+      return 'object';
+  }
 };
 
 Pseudocode.ConditionalExpression.prototype.inferDataType = function() {
