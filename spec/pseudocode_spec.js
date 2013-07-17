@@ -38,7 +38,7 @@ describe('Pseudocode', function() {
             dataType: 'func<array<int>>',
             identifiers: {
               'array': { dataType: 'array<int>' },
-              'range': { dataType: 'array' },
+              'range': { dataType: 'array' }, // should be array<int>
               'min': { dataType: 'int' },
               'counts': { dataType: 'array<int>' },
               'i': { dataType: 'int' },

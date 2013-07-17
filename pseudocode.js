@@ -190,10 +190,11 @@ Pseudocode.Node.prototype.eachChildInScope = function(callback, scope, type) {
  * a callback for each.
  *
  * @param {function} callback The callback to invoke for each descendent.
+ * @param {string=} type The type of node restrict results to.
  */
-Pseudocode.Node.prototype.eachDescendent = function(callback) {
+Pseudocode.Node.prototype.eachDescendent = function(callback, type) {
   Lazy(this.children).each(function(child) {
-    if (callback(child) === false) {
+    if ((!type || child.type === type) && callback(child) === false) {
       return false;
     }
     child.eachDescendent(callback);
@@ -263,7 +264,7 @@ Pseudocode.Node.prototype.registerIdentifierType = function(identifier, dataType
  * Registers a possible return type for a function.
  *
  * @param {Pseudocode.Identifier} identifier The identifier of the function.
- * @param {string} returnType The name of the return type.
+ * @param {string=} returnType The name of the return type.
  */
 Pseudocode.Node.prototype.registerFunctionReturnType = function(identifier, returnType) {
   if (this.getTypeForIdentifier(identifier) === 'function') {
@@ -740,6 +741,7 @@ Pseudocode.BinaryExpression.prototype.inferDataType = function() {
     case '!=':
     case '===':
     case '!==':
+    case 'instanceof':
       return 'bool';
 
     default:
