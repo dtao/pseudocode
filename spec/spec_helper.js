@@ -18,7 +18,10 @@ beforeEach(function() {
         this.env.compareObjects_(this.actual, expected, diffKeys, diffValues);
 
         this.message = function() {
-          return diffKeys.concat(diffValues).join('\n     ');
+          return diffKeys.concat(diffValues)
+            .join('\n     ')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>');
         };
 
         return diffKeys.length + diffValues.length === 0;
