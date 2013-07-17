@@ -161,6 +161,30 @@ Pseudocode.Node.prototype.initialize = function() {
 };
 
 /**
+ * Iterates over all the nodes in the current node's scope, without descending
+ * into nested scopes.
+ *
+ * @param {function} callback The callback to invoke for each node.
+ * @param {Pseudocode.Node=} scope The scope to iterate in (defaults to this
+ *     node's scope).
+ */
+Pseudocode.Node.prototype.eachChildInScope = function(callback, scope) {
+  scope = scope || this.getChildScope();
+
+  Lazy(this.children).each(function(child) {
+    if (child.scope !== scope) {
+      return;
+    }
+    if (callback(child) === false) {
+      return false;
+    }
+    if (child.getChildScope() === scope) {
+      child.eachChildInScope(callback, scope);
+    }
+  });
+};
+
+/**
  * Walks all of a node's descendents (children, grandchildren, etc.) and invokes
  * a callback for each.
  *
@@ -204,6 +228,10 @@ Pseudocode.Node.prototype.registerIdentifierType = function(identifier, dataType
     this.fail('invalid data type: ' + dataType);
   }
 
+  if (dataType === 'object') {
+    return;
+  }
+
   var typeList = this.identifierTypes[identifier.name];
   if (!typeList) {
     typeList = this.identifierTypes[identifier.name] = new Pseudocode.SetList();
@@ -213,32 +241,45 @@ Pseudocode.Node.prototype.registerIdentifierType = function(identifier, dataType
 };
 
 /**
- * Returns an array of all the identifiers belonging to the scope of this node.
+ * Gets the known data type (if available) for the given identifier. Only
+ * returns a result when it is unambiguous (i.e., when there is exactly one
+ * possible type for the identifier).
+ *
+ * @param {Pseudocode.Identifier} identifier The identifier to look up.
+ * @return {string} The known data type for the identifier, if available.
+ */
+Pseudocode.Node.prototype.getTypeForIdentifier = function(identifier) {
+  var typeList = this.identifierTypes[identifier.name];
+  return typeList && typeList.length === 1 && typeList.get(0);
+};
+
+/**
+ * Gets all the identifiers within the scope of this node.
  *
  * @param {boolean=} recursive Whether or not to include all of the identifiers
  *     of this node and its child nodes recursively.
  * @return {object} A map of all identifiers and their types.
  */
 Pseudocode.Node.prototype.getIdentifiers = function(recursive) {
-  var identifiers = {};
+  var scope = this.getChildScope(),
+      identifiers = {};
 
-  if (recursive) {
-    this.eachDescendent(function(node) {
-      if (node instanceof Pseudocode.Identifier) {
-        // Exclude member expressions.
-        if (!(node.parent instanceof Pseudocode.MemberExpression)) {
-          identifiers[node.name] = { dataType: node.getDataType() };
-        }
-      }
-    });
+  this.eachChildInScope(function(child) {
+    var data = {};
 
-  } else {
-    Lazy(this.children).each(function(child) {
-      if (child.id instanceof Pseudocode.Identifier) {
-        identifiers[child.id.name] = { dataType: child.id.getDataType() };
+    if (child instanceof Pseudocode.FunctionDeclaration) {
+      data = identifiers[child.id.name] = { dataType: child.id.getDataType() };
+
+    } else if (child instanceof Pseudocode.Identifier) {
+      if (child.isDefinedHere()) {
+        data = identifiers[child.name] = { dataType: child.getDataType() };
       }
-    });
-  }
+    }
+
+    if (recursive && child.getChildScope() !== scope) {
+      data.identifiers = child.getIdentifiers(true);
+    }
+  });
 
   return identifiers;
 };
@@ -399,8 +440,21 @@ Pseudocode.Identifier.prototype.getDataType = function() {
 };
 
 Pseudocode.Identifier.prototype.inferDataType = function() {
-  var possibleTypes = this.scope.identifierTypes[this.name];
-  return (possibleTypes && possibleTypes.length === 1) ? possibleTypes.get(0) : 'object';
+  return this.scope.getTypeForIdentifier(this) || 'object';
+};
+
+Pseudocode.Identifier.prototype.isDefinedHere = function() {
+  if (this.parent instanceof Pseudocode.FunctionDeclaration) {
+    return true;
+  }
+
+  if (this.parent instanceof Pseudocode.VariableDeclarator) {
+    if (this === this.parent.id) {
+      return true;
+    }
+  }
+
+  return false;
 };
 
 Pseudocode.Literal.prototype.inferDataType = function() {
@@ -415,13 +469,38 @@ Pseudocode.Literal.prototype.inferDataType = function() {
 };
 
 Pseudocode.AssignmentExpression.prototype.initialize = function() {
-  if (this.left instanceof Pseudocode.Identifier) {
-    this.scope.registerIdentifierType(this.left, this.right.getDataType());
+  switch (this.operator) {
+    // These operators only make sense for integers.
+    case '-=':
+    case '*=':
+    case '/=':
+      if (this.left instanceof Pseudocode.Identifier) {
+        this.scope.registerIdentifierType(this.left, 'int');
+      }
+      if (this.right instanceof Pseudocode.Identifier) {
+        this.scope.registerIdentifierType(this.right, 'int');
+      }
+      break;
+
+    default:
+      if (this.left instanceof Pseudocode.Identifier) {
+        this.scope.registerIdentifierType(this.left, this.right.getDataType());
+      }
   }
 };
 
 Pseudocode.AssignmentExpression.prototype.inferDataType = function() {
   switch (this.operator) {
+    // TODO: implement type deduction w/ multiple possibilities
+    // (i.e., this could really be a string)
+    case '+=':
+      return 'int'; // or string
+
+    case '-=':
+    case '*=':
+    case '/=':
+      return 'int';
+
     case '=':
       return this.right.getDataType();
 
@@ -430,14 +509,49 @@ Pseudocode.AssignmentExpression.prototype.inferDataType = function() {
   }
 };
 
+Pseudocode.BinaryExpression.prototype.initialize = function() {
+  switch (this.operator) {
+    // TODO: implement type deduction w/ multiple possibilities
+    // (i.e., this could really be a string)
+    case '+':
+    case '<':
+    case '>':
+    case '<=':
+    case '>=':
+      if (this.left instanceof Pseudocode.Identifier) {
+        this.scope.registerIdentifierType(this.left, 'int');
+      }
+      if (this.right instanceof Pseudocode.Identifier) {
+        this.scope.registerIdentifierType(this.right, 'int');
+      }
+      break;
+
+    case '-':
+    case '*':
+    case '/':
+    case '>>':
+    case '<<':
+    case '>>>':
+    case '<<<':
+      if (this.left instanceof Pseudocode.Identifier) {
+        this.scope.registerIdentifierType(this.left, 'int');
+      }
+      if (this.right instanceof Pseudocode.Identifier) {
+        this.scope.registerIdentifierType(this.right, 'int');
+      }
+  }
+};
+
 Pseudocode.BinaryExpression.prototype.inferDataType = function() {
   switch (this.operator) {
     // TODO: implement type deduction w/ multiple possibilities
     // (i.e., this could really be a string)
     case '+':
-    case '-':
       return 'int'; // or string
 
+    case '-':
+    case '*':
+    case '/':
     case '>>':
     case '<<':
     case '>>>':
@@ -450,6 +564,34 @@ Pseudocode.BinaryExpression.prototype.inferDataType = function() {
     case '>=':
     case '==':
       return 'bool';
+
+    default:
+      this.fail('Type inference not implemented for operator ' + this.operator);
+  }
+};
+
+Pseudocode.ConditionalExpression.prototype.inferDataType = function() {
+  if (this.alternate.getDataType() === this.consequent.getDataType()) {
+    return this.consequent.getDataType();
+  }
+  return 'object';
+};
+
+Pseudocode.UpdateExpression.prototype.initialize = function() {
+  switch (this.operator) {
+    case '--':
+    case '++':
+      if (this.argument instanceof Pseudocode.Identifier) {
+        this.scope.registerIdentifierType(this.argument, 'int');
+      }
+  }
+};
+
+Pseudocode.UpdateExpression.prototype.inferDataType = function() {
+  switch (this.operator) {
+    case '--':
+    case '++':
+      return 'int';
 
     default:
       this.fail('Type inference not implemented for operator ' + this.operator);
@@ -475,11 +617,13 @@ Pseudocode.MemberExpression.prototype.inferDataType = function() {
   }
 };
 
-Pseudocode.ConditionalExpression.prototype.inferDataType = function() {
-  if (this.alternate.getDataType() === this.consequent.getDataType()) {
-    return this.consequent.getDataType();
-  }
-  return 'object';
+Pseudocode.CallExpression.prototype.inferDataType = function() {
+  var functionType = this.callee.getDataType();
+  return functionType.returnType || 'object';
+};
+
+Pseudocode.ArrayExpression.prototype.inferDataType = function() {
+  return 'array';
 };
 
 module.exports = Pseudocode;
