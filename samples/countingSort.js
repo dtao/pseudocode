@@ -9,7 +9,7 @@ function countingSort(array) {
 
   var result = [];
   for (var i = 0; i < counts.length; ++i) {
-    while (counts[i] > 0) {
+    while (counts[i]-- > 0) {
       result.push(i + min);
     }
   }
@@ -39,3 +39,5 @@ function minMax(array) {
   }
   return [min, max];
 }
+
+module.exports = countingSort;
