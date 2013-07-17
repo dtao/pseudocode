@@ -203,9 +203,7 @@ Pseudocode.Node.prototype.registerIdentifierType = function(identifier, dataType
     typeList = this.identifierTypes[identifier.name] = [];
   }
 
-  console.log('Registering type ' + dataType + ' for identifier ' + identifier.name);
   typeList.push(dataType);
-  console.log('Current type list: ' + JSON.stringify(typeList));
 };
 
 /**
@@ -237,10 +235,10 @@ Pseudocode.Node.prototype.getIdentifiers = function(recursive) {
 };
 
 Pseudocode.Node.prototype.getDataType = function() {
-  if (!this.getDataType()) {
-    this.getDataType() = this.inferDataType();
+  if (!this.dataType) {
+    this.dataType = this.inferDataType();
   }
-  return this.getDataType();
+  return this.dataType;
 };
 
 Pseudocode.Node.prototype.inferDataType = function() {
@@ -339,7 +337,6 @@ Pseudocode.FunctionDeclaration.prototype.initialize = function() {
   // function, but all other children belong to the scope inside the function. (Actually makes
   // perfect sense, just doesn't lend itself to the most graceful implementation.)
   this.id.scope = this.scope;
-  this.id.getDataType() = this.id.inferDataType();
 };
 
 Pseudocode.VariableDeclarator.prototype.initialize = function() {
