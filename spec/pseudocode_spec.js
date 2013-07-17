@@ -9,15 +9,18 @@ describe('Pseudocode', function() {
     });
 
     it('provides recursive access to all of the identifiers in a program', function() {
-      expect(binarySearch.getIdentifiers(true)).toEqual([
-        ['binarySearch', 'function', [
-          ['haystack', 'array'],
-          ['needle', 'object'],
-          ['low', 'int'],
-          ['high', 'int'],
-          ['current', 'int']]
-        ]
-      ]);
+      expect(binarySearch.getIdentifiers(true)).toEqual({
+        'binarySearch': {
+          dataType: 'function',
+          identifiers: {
+            'haystack': { dataType: 'array' },
+            'needle': { dataType: 'object' },
+            'low': { dataType: 'int' },
+            'high': { dataType: 'high' },
+            'current': { dataType: 'current' }
+          }
+        }
+      });
     });
   });
 });

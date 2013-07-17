@@ -37,11 +37,15 @@ Pseudocode.Node = function() {};
  * Defines a new type of node with additional functionality.
  *
  * @param {string} name The name of the new node type.
- * @param {object} functions A map of functions to attach to the prototype of
- *     the new node type.
+ * @param {object=} functions An optional map of functions to attach to the
+ *     prototype of the new node type.
+ * @param {object=} baseType The base type for this node (defaults to Node).
  * @return {function} The constructor for the new node type.
  */
-Pseudocode.Node.define = function(name, functions) {
+Pseudocode.Node.define = function(name, functions, baseType) {
+  functions = functions || {};
+  baseType = baseType || Pseudocode.Node;
+
   var ctor = function(rawNode, parent) {
     var self     = this;
     self.rawNode = rawNode;
@@ -81,7 +85,7 @@ Pseudocode.Node.define = function(name, functions) {
     }
   };
 
-  ctor.prototype = new Pseudocode.Node();
+  ctor.prototype = new baseType();
 
   Lazy(functions).each(function(fn, name) {
     ctor.prototype[name] = fn;
@@ -135,6 +139,7 @@ Pseudocode.Node.prototype.getChildScope = function() {
  */
 Pseudocode.Node.prototype.createScope = function() {
   this.identifiers = this.identifiers || {};
+  this.identifierTypes = this.identifierTypes || {};
   return this;
 };
 
@@ -154,6 +159,21 @@ Pseudocode.Node.prototype.initialize = function() {
 };
 
 /**
+ * Walks all of a node's descendents (children, grandchildren, etc.) and invokes
+ * a callback for each.
+ *
+ * @param {function} callback The callback to invoke for each descendent.
+ */
+Pseudocode.Node.prototype.eachDescendent = function(callback) {
+  Lazy(this.children).each(function(child) {
+    if (callback(child) === false) {
+      return false;
+    }
+    child.eachDescendent(callback);
+  });
+};
+
+/**
  * Registers an identifier with the scope of the current node.
  *
  * @param {Pseudocode.Identifier} identifier The identifier to register.
@@ -167,32 +187,64 @@ Pseudocode.Node.prototype.registerIdentifier = function(identifier) {
 };
 
 /**
+ * Registers a possible data type for an identifier, based on (most likely) some
+ *     heuristic.
+ *
+ * @param {Pseudocode.Identifier} identifier The identifier to register.
+ * @param {string} dataType The name for the type for this identifier.
+ */
+Pseudocode.Node.prototype.registerIdentifierType = function(identifier, dataType) {
+  if (!this.identifierTypes) {
+    this.fail('no identifier types table');
+  }
+
+  var typeList = this.identifierTypes[identifier.name];
+  if (!typeList) {
+    typeList = this.identifierTypes[identifier.name] = [];
+  }
+
+  console.log('Registering type ' + dataType + ' for identifier ' + identifier.name);
+  typeList.push(dataType);
+  console.log('Current type list: ' + JSON.stringify(typeList));
+};
+
+/**
  * Returns an array of all the identifiers belonging to the scope of this node.
  *
  * @param {boolean=} recursive Whether or not to include all of the identifiers
  *     of this node and its child nodes recursively.
- * @return {Array} An array containing all of the identifiers.
+ * @return {object} A map of all identifiers and their types.
  */
 Pseudocode.Node.prototype.getIdentifiers = function(recursive) {
-  var childScope = this.getChildScope();
+  var identifiers = {};
 
-  if (!recursive) {
-    return Lazy(childScope.identifiers).keys().toArray();
+  if (recursive) {
+    this.eachDescendent(function(node) {
+      if (node instanceof Pseudocode.Identifier) {
+        identifiers[node.name] = { dataType: node.getDataType() };
+      }
+    });
+
+  } else {
+    Lazy(this.children).each(function(child) {
+      if (child instanceof Pseudocode.Identifier) {
+        identifiers[child.name] = { dataType: child.getDataType() };
+      }
+    });
   }
 
-  var self = this, identifiers = [];
-  Lazy(childScope.identifiers).each(function(node, identifier) {
-    var data = [identifier, 'object'];
-    if (node.scope !== self) {
-      var childIdentifiers = node.scope.getChildScope().getIdentifiers(true);
-      if (childIdentifiers.length > 0) {
-        data.push(childIdentifiers);
-      }
-    }
-    identifiers.push(data);
-  });
-
   return identifiers;
+};
+
+Pseudocode.Node.prototype.getDataType = function() {
+  if (!this.getDataType()) {
+    this.getDataType() = this.inferDataType();
+  }
+  return this.getDataType();
+};
+
+Pseudocode.Node.prototype.inferDataType = function() {
+  return 'void';
 };
 
 /**
@@ -231,7 +283,7 @@ Pseudocode.Node.prototype.toString = function() {
 Pseudocode.Node.prototype.fail = function(message, node) {
   message = this + ': ' + message;
 
-  if (node) {
+  if (node = node || this.rawNode) {
     message += '\n\nKeys:\n' + JSON.stringify(Object.keys(node), null, 2);
     message += '\n\nNode:\n' + JSON.stringify(node, null, 2).substring(0, 1000);
   }
@@ -239,8 +291,33 @@ Pseudocode.Node.prototype.fail = function(message, node) {
   throw message;
 };
 
-Lazy(astMap).each(function(selectors, name) {
+/**
+ * A type of node that evaluates to a certain data type.
+ *
+ * @constructor
+ */
+Pseudocode.Expression = function() {};
+
+Pseudocode.Expression.prototype = new Pseudocode.Node();
+
+Pseudocode.Expression.define = function(name, functions) {
+  return Pseudocode.Node.define(name, functions, Pseudocode.Expression);
+};
+
+Pseudocode.Expression.prototype.inferDataType = function() {
+  this.fail('inferDataType not implemented', this.rawNode);
+};
+
+Lazy(astMap.Statements).each(function(selectors, name) {
   Pseudocode.Node.define(name, {
+    getChildSelectors: function() {
+      return selectors;
+    }
+  });
+});
+
+Lazy(astMap.Expressions).each(function(selectors, name) {
+  Pseudocode.Expression.define(name, {
     getChildSelectors: function() {
       return selectors;
     }
@@ -253,9 +330,90 @@ Pseudocode.FunctionDeclaration.prototype.getChildScope = function() {
 
 Pseudocode.FunctionDeclaration.prototype.initialize = function() {
   this.scope.registerIdentifier(this.id);
+  this.scope.registerIdentifierType(this.id, 'function');
   Lazy(this.params).each(function(param) {
     param.scope.registerIdentifier(param);
   });
+
+  // Function declarations are a bit weird because the identifier belongs in the scope outside the
+  // function, but all other children belong to the scope inside the function. (Actually makes
+  // perfect sense, just doesn't lend itself to the most graceful implementation.)
+  this.id.scope = this.scope;
+  this.id.getDataType() = this.id.inferDataType();
+};
+
+Pseudocode.VariableDeclarator.prototype.initialize = function() {
+  this.scope.registerIdentifier(this.id);
+  if (this.init) {
+    this.scope.registerIdentifierType(this.id, this.init.getDataType());
+  }
+};
+
+Pseudocode.Identifier.prototype.getDataType = function() {
+  return this.inferDataType();
+};
+
+Pseudocode.Identifier.prototype.inferDataType = function() {
+  var possibleTypes = this.scope.identifierTypes[this.name];
+  return (possibleTypes && possibleTypes.length === 1) ? possibleTypes[0] : 'object';
+};
+
+Pseudocode.Literal.prototype.inferDataType = function() {
+  switch (typeof this.value) {
+    case 'string': return 'string';
+    case 'number': return 'int';
+    case 'boolean': return 'bool';
+
+    default:
+      this.fail('Unknown literal type: ' + typeof this.value);
+  }
+};
+
+Pseudocode.AssignmentExpression.prototype.inferDataType = function() {
+  switch (this.operator) {
+    case '=':
+      return this.right.getDataType();
+
+    default:
+      this.fail('Type inference not implemented for operator ' + this.operator);
+  }
+};
+
+Pseudocode.BinaryExpression.prototype.inferDataType = function() {
+  switch (this.operator) {
+    // TODO: implement type deduction w/ multiple possibilities
+    // (i.e., this could really be a string)
+    case '+':
+    case '-':
+      return 'int'; // or string
+
+    case '>>':
+    case '<<':
+    case '>>>':
+    case '<<<':
+      return 'int';
+
+    case '<':
+    case '>':
+    case '<=':
+    case '>=':
+    case '==':
+      return 'bool';
+
+    default:
+      this.fail('Type inference not implemented for operator ' + this.operator);
+  }
+};
+
+Pseudocode.MemberExpression.prototype.inferDataType = function() {
+  return 'object';
+};
+
+Pseudocode.ConditionalExpression.prototype.inferDataType = function() {
+  if (this.alternate.getDataType() === this.consequent.getDataType()) {
+    return this.consequent.getDataType();
+  }
+  return 'object';
 };
 
 module.exports = Pseudocode;
