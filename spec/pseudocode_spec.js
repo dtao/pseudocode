@@ -7,7 +7,11 @@ describe('Pseudocode', function() {
   describe('getIdentifiers', function() {
     it('provides a list of the identifiers under a given scope', function() {
       expect(binarySearch.getIdentifiers()).toEqual({
-        'binarySearch': { dataType: 'function' }
+        'binarySearch': {
+          dataType: {
+            returnType: 'int'
+          }
+        }
       });
     });
 

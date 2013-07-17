@@ -237,7 +237,57 @@ Pseudocode.Node.prototype.registerIdentifierType = function(identifier, dataType
     typeList = this.identifierTypes[identifier.name] = new Pseudocode.SetList();
   }
 
+  // Don't replace a strongly-typed function w/ 'function'.
+  if (dataType === 'function') {
+    if (this.getTypeForIdentifier(identifier) instanceof Pseudocode.FunctionType) {
+      return;
+    }
+  }
+
+  // Similarly, don't replace a strongly-typed collection w/ 'array'.
+  if (dataType === 'array') {
+    if (this.getTypeForIdentifier(identifier) instanceof Pseudocode.CollectionType) {
+      return;
+    }
+  }
+
   typeList.push(dataType);
+};
+
+/**
+ * Registers a possible return type for a function.
+ *
+ * @param {Pseudocode.Identifier} identifier The identifier of the function.
+ * @param {string} returnType The name of the return type.
+ */
+Pseudocode.Node.prototype.registerFunctionReturnType = function(identifier, returnType) {
+  if (this.getTypeForIdentifier(identifier) === 'function') {
+    this.clearTypesForIdentifier(identifier);
+  }
+
+  var returnType = returnType ?
+    new Pseudocode.FunctionType(returnType) : 'function';
+
+  this.registerIdentifierType(identifier, returnType);
+};
+
+/**
+ * Registers a possible collection type (e.g., array, list) and element type for
+ * a collection.
+ *
+ * @param {Pseudocode.Identifier} identifier The identifier of the collection.
+ * @param {string=} options.collectionType The name of the collection type.
+ * @param {string=} options.elementType The name of the element type.
+ */
+Pseudocode.Node.prototype.registerCollectionType = function(identifier, options) {
+  if (this.getTypeForIdentifier(identifier) === 'array') {
+    this.clearTypesForIdentifier(identifier);
+  }
+
+  var collectionType = options.elementType ?
+    new Pseudocode.CollectionType(options.elementType) : 'array';
+
+  this.registerIdentifierType(identifier, collectionType);
 };
 
 /**
@@ -251,6 +301,15 @@ Pseudocode.Node.prototype.registerIdentifierType = function(identifier, dataType
 Pseudocode.Node.prototype.getTypeForIdentifier = function(identifier) {
   var typeList = this.identifierTypes[identifier.name];
   return typeList && typeList.length === 1 && typeList.get(0);
+};
+
+/**
+ * Clears registered types for the given identifier.
+ *
+ * @param {Pseudocode.Identifier} identifier The identifier to clear.
+ */
+Pseudocode.Node.prototype.clearTypesForIdentifier = function(identifier) {
+  delete this.identifierTypes[identifier.name];
 };
 
 /**
@@ -268,11 +327,11 @@ Pseudocode.Node.prototype.getIdentifiers = function(recursive) {
     var data = {};
 
     if (child instanceof Pseudocode.FunctionDeclaration) {
-      data = identifiers[child.id.name] = { dataType: child.id.getDataType() };
+      data = identifiers[child.id.name] = { dataType: child.id.getDataType().toString() };
 
     } else if (child instanceof Pseudocode.Identifier) {
       if (child.isDefinedHere()) {
-        data = identifiers[child.name] = { dataType: child.getDataType() };
+        data = identifiers[child.name] = { dataType: child.getDataType().toString() };
       }
     }
 
@@ -357,6 +416,25 @@ Pseudocode.Expression.prototype.inferDataType = function() {
 };
 
 /**
+ * Basically says 'I believe the expression is of type T', which might be useful
+ * in any number of ways.
+ *
+ * @param {string} dataType The probably data type for the expression.
+ */
+Pseudocode.Expression.prototype.probableDataType = function(dataType) {
+  if (this instanceof Pseudocode.Identifier) {
+    this.scope.registerIdentifierType(this, dataType);
+  }
+  if (this instanceof Pseudocode.MemberExpression && this.object instanceof Pseudocode.Identifier) {
+    if (this.computed && this.property.getDataType() === 'int') {
+      this.scope.registerCollectionType(this.object, {
+        elementType: dataType
+      });
+    }
+  }
+};
+
+/**
  * An expandable list of strings without duplicates.
  *
  * @constructor
@@ -395,6 +473,36 @@ Pseudocode.SetList.prototype.get = function(n) {
   return this.list[n];
 };
 
+/**
+ * Represents a function along with its return type.
+ *
+ * @param {string} returnType The return type of the function.
+ * @constructor
+ */
+Pseudocode.FunctionType = function(returnType) {
+  this.functionType = 'function';
+  this.returnType = returnType;
+};
+
+Pseudocode.FunctionType.prototype.toString = function() {
+  return 'func<' + this.returnType + '>';
+};
+
+/**
+ * Represents a collection along with the type of elements it contains.
+ *
+ * @param {string} elementType The type of elements in the collection.
+ * @constructor
+ */
+Pseudocode.CollectionType = function(elementType) {
+  this.collectionType = 'array';
+  this.elementType = elementType;
+};
+
+Pseudocode.CollectionType.prototype.toString = function() {
+  return 'array<' + this.elementType + '>';
+};
+
 Lazy(astMap.Statements).each(function(selectors, name) {
   Pseudocode.Node.define(name, {
     getChildSelectors: function() {
@@ -417,7 +525,6 @@ Pseudocode.FunctionDeclaration.prototype.getChildScope = function() {
 
 Pseudocode.FunctionDeclaration.prototype.initialize = function() {
   this.scope.registerIdentifier(this.id);
-  this.scope.registerIdentifierType(this.id, 'function');
   Lazy(this.params).each(function(param) {
     param.scope.registerIdentifier(param);
   });
@@ -426,6 +533,26 @@ Pseudocode.FunctionDeclaration.prototype.initialize = function() {
   // function, but all other children belong to the scope inside the function. (Actually makes
   // perfect sense, just doesn't lend itself to the most graceful implementation.)
   this.id.scope = this.scope;
+
+  this.tryToInferType();
+};
+
+Pseudocode.FunctionDeclaration.prototype.tryToInferType = function() {
+  var self = this,
+      returnStatements = 0;
+
+  self.eachChildInScope(function(node) {
+    var returnType;
+    if (node instanceof Pseudocode.ReturnStatement) {
+      returnType = node.argument ? node.argument.getDataType() : 'void';
+      self.scope.registerFunctionReturnType(self.id, returnType);
+      ++returnStatements;
+    }
+  });
+
+  if (returnStatements === 0) {
+    self.scope.registerFunctionReturnType(self.id, 'void');
+  }
 };
 
 Pseudocode.VariableDeclarator.prototype.initialize = function() {
@@ -474,18 +601,12 @@ Pseudocode.AssignmentExpression.prototype.initialize = function() {
     case '-=':
     case '*=':
     case '/=':
-      if (this.left instanceof Pseudocode.Identifier) {
-        this.scope.registerIdentifierType(this.left, 'int');
-      }
-      if (this.right instanceof Pseudocode.Identifier) {
-        this.scope.registerIdentifierType(this.right, 'int');
-      }
+      this.left.probableDataType('int');
+      this.right.probableDataType('int');
       break;
 
     default:
-      if (this.left instanceof Pseudocode.Identifier) {
-        this.scope.registerIdentifierType(this.left, this.right.getDataType());
-      }
+      this.left.probableDataType(this.right.getDataType());
   }
 };
 
@@ -518,12 +639,8 @@ Pseudocode.BinaryExpression.prototype.initialize = function() {
     case '>':
     case '<=':
     case '>=':
-      if (this.left instanceof Pseudocode.Identifier) {
-        this.scope.registerIdentifierType(this.left, 'int');
-      }
-      if (this.right instanceof Pseudocode.Identifier) {
-        this.scope.registerIdentifierType(this.right, 'int');
-      }
+      this.left.probableDataType('int');
+      this.right.probableDataType('int');
       break;
 
     case '-':
@@ -533,12 +650,9 @@ Pseudocode.BinaryExpression.prototype.initialize = function() {
     case '<<':
     case '>>>':
     case '<<<':
-      if (this.left instanceof Pseudocode.Identifier) {
-        this.scope.registerIdentifierType(this.left, 'int');
-      }
-      if (this.right instanceof Pseudocode.Identifier) {
-        this.scope.registerIdentifierType(this.right, 'int');
-      }
+      this.left.probableDataType('int');
+      this.right.probableDataType('int');
+      break;
   }
 };
 
@@ -581,9 +695,8 @@ Pseudocode.UpdateExpression.prototype.initialize = function() {
   switch (this.operator) {
     case '--':
     case '++':
-      if (this.argument instanceof Pseudocode.Identifier) {
-        this.scope.registerIdentifierType(this.argument, 'int');
-      }
+      this.argument.probableDataType('int');
+      break;
   }
 };
 
@@ -610,6 +723,7 @@ Pseudocode.MemberExpression.prototype.inferDataType = function() {
   switch (this.property.name) {
     case 'count':
     case 'length':
+    case 'size':
       return 'int';
 
     default:
@@ -623,6 +737,15 @@ Pseudocode.CallExpression.prototype.inferDataType = function() {
 };
 
 Pseudocode.ArrayExpression.prototype.inferDataType = function() {
+  var elementTypes = Lazy(this.elements)
+    .map(function(node) { return node.getDataType() })
+    .uniq()
+    .toArray();
+
+  if (elementTypes.length === 1) {
+    return new Pseudocode.CollectionType(elementTypes[0]);
+  }
+
   return 'array';
 };
 
