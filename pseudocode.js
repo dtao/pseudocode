@@ -229,11 +229,14 @@
       this.fail('no identifiers table');
     }
 
-    // if (!identifier) {
-    //   this.fail('cannot register a null identifier');
-    // }
+    if (!identifier) {
+      this.fail('cannot register a null identifier');
+    }
 
-    this.identifiers[identifier.name] = identifier;
+    // TODO: This is totally not cool. Probably I should update the nodeTypes
+    // map to include the properties of each node; then 'name' and so forth can
+    // be attached to the necessary prototype as methods.
+    this.identifiers[identifier.name || identifier.rawNode.name] = identifier;
   };
 
   /**
@@ -378,6 +381,11 @@
     return 'void';
   };
 
+  Pseudocode.Node.prototype.isFunction = function() {
+    return this instanceof Pseudocode.FunctionDeclaration ||
+      this instanceof Pseudocode.FunctionExpression;
+  };
+
   Pseudocode.Node.prototype.isFunctionType = function() {
     var dataType = this.getDataType();
     return dataType === 'function' || dataType instanceof Pseudocode.FunctionType;
@@ -455,15 +463,15 @@
    * Basically says 'I believe the expression is of type T', which might be useful
    * in any number of ways.
    *
-   * @param {string} dataType The probably data type for the expression.
+   * @param {string} dataType The probable data type for the expression.
    */
   Pseudocode.Expression.prototype.probableDataType = function(dataType) {
     if (this instanceof Pseudocode.Identifier) {
-      this.scope.registerIdentifierType(this, dataType);
+      this.definingScope().registerIdentifierType(this, dataType);
     }
     if (this instanceof Pseudocode.MemberExpression && this.object instanceof Pseudocode.Identifier) {
       if (this.computed && this.property.getDataType() === 'int') {
-        this.scope.registerCollectionType(this.object, {
+        this.object.definingScope().registerCollectionType(this.object, {
           elementType: dataType
         });
       }
@@ -606,14 +614,6 @@
   };
 
   Pseudocode.Functional.finalize = function() {
-    if (this.id) {
-      this.scope.registerIdentifier(this.id);
-    }
-
-    Lazy(this.params).each(function(param) {
-      param.scope.registerIdentifier(param);
-    });
-
     // Function declarations are a bit weird because the identifier belongs in the scope outside the
     // function, but all other children belong to the scope inside the function. (Actually makes
     // perfect sense, just doesn't lend itself to the most graceful implementation.)
@@ -669,6 +669,20 @@
     }
   };
 
+  Pseudocode.Identifier.prototype.initialize = function() {
+    if (this.parent && this.parent.isFunction()) {
+      if (this === this.parent.id) {
+        this.parent.scope.registerIdentifier(this);
+      } else {
+        this.scope.registerIdentifier(this);
+      }
+    }
+
+    if (this.parent instanceof Pseudocode.VariableDeclarator) {
+      this.scope.registerIdentifier(this);
+    }
+  };
+
   Pseudocode.Identifier.prototype.finalize = function() {
     var data = this.program.allIdentifiers[this.name] || { scopes: [] };
     data.scopes.push('' + this.scope);
@@ -699,6 +713,14 @@
     }
 
     return false;
+  };
+
+  Pseudocode.Identifier.prototype.definingScope = function() {
+    var scope = this.scope;
+    while (!scope.identifiers[this.name] && !(scope instanceof Pseudocode.Program)) {
+      scope = scope.scope;
+    }
+    return scope;
   };
 
   Pseudocode.Identifier.prototype.toString = function() {
@@ -788,6 +810,7 @@
       case '-':
       case '*':
       case '/':
+      case '%':
       case '>>':
       case '<<':
       case '>>>':
@@ -808,6 +831,7 @@
       case '-':
       case '*':
       case '/':
+      case '%':
       case '>>':
       case '<<':
       case '>>>':
