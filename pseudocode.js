@@ -545,6 +545,7 @@
       'ForStatement': ['init', 'test', 'update', 'body'],
       'SwitchStatement': ['discriminant', 'cases'],
       'SwitchCase': ['test', 'consequent'],
+      'EmptyStatement': [],
       'ReturnStatement': ['argument'],
     },
 
