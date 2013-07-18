@@ -8,61 +8,55 @@ describe('Pseudocode', function() {
   describe('getIdentifiers', function() {
     describe('binary search example', function() {
       it('provides a list of the identifiers under a given scope', function() {
-        expect(binarySearch.getIdentifiers()).toEqual({
-          'binarySearch': {
-            dataType: 'func<int>'
-          }
-        });
+        expect(binarySearch).toHaveIdentifiers(false, [
+          ['binarySearch', 'func<int>']
+        ]);
       });
 
       it('provides recursive access to all of the identifiers in a program', function() {
-        expect(binarySearch.getIdentifiers(true)).toEqual({
-          'binarySearch': {
-            dataType: 'func<int>',
-            identifiers: {
-              'haystack': { dataType: 'array<int>' },
-              'needle': { dataType: 'int' },
-              'low': { dataType: 'int' },
-              'high': { dataType: 'int' },
-              'current': { dataType: 'int' }
-            }
-          },
-        });
+        expect(binarySearch).toHaveIdentifiers(true, [
+          [
+            'binarySearch', 'func<int>', [
+              ['haystack', 'array<int>'],
+              ['needle', 'int'],
+              ['low', 'int'],
+              ['high', 'int'],
+              ['current', 'int']
+            ]
+          ]
+        ]);
       });
     });
 
     describe('counting sort example', function() {
       it('provides recursive access to all the identifies in the program', function() {
-        expect(countingSort.getIdentifiers(true)).toEqual({
-          'countingSort': {
-            dataType: 'func<array<int>>',
-            identifiers: {
-              'array': { dataType: 'array<int>' },
-              'range': { dataType: 'array' }, // should be array<int>
-              'min': { dataType: 'int' },
-              'counts': { dataType: 'array<int>' },
-              'i': { dataType: 'int' },
-              'result': { dataType: 'array<int>' }
-            }
-          },
-          'createArray': {
-            dataType: 'func<array<int>>',
-            identifiers: {
-              'range': { dataType: 'array<int>' },
-              'arr': { dataType: 'array<int>' },
-              'i': { dataType: 'int' }
-            }
-          },
-          'minMax': {
-            dataType: 'func<array<int>>',
-            identifiers: {
-              'array': { dataType: 'array<int>' },
-              'min': { dataType: 'int' },
-              'max': { dataType: 'int' },
-              'i': { dataType: 'int' }
-            }
-          }
-        });
+        expect(countingSort).toHaveIdentifiers(true, [
+          [
+            'countingSort', 'func<array<int>>', [
+              ['array', 'array<int>'],
+              ['range', 'array<int>'],
+              ['min', 'int'],
+              ['counts', 'array<int>'],
+              ['i', 'int'],
+              ['result', 'array<int>']
+            ]
+          ],
+          [
+            'createArray', 'func<array<int>>', [
+              ['range', 'array<int>'],
+              ['arr', 'array<int>'],
+              ['i', 'int']
+            ]
+          ],
+          [
+            'minMax', 'func<array<int>>', [
+              ['array', 'array<int>'],
+              ['min', 'int'],
+              ['max', 'int'],
+              ['i', 'int']
+            ]
+          ]
+        ]);
       });
     });
   });
