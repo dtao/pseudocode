@@ -661,7 +661,7 @@
           registeredType = node.id.getDataType();
           inferredDataType = node.inferDataType();
           if (!typesAreEqual(registeredType, inferredDataType)) {
-            if (node.id.registeredDataType(inferredDataType)) {
+            if (node.id.registerDataType(inferredDataType)) {
               ++typesInferred;
             }
             return;
