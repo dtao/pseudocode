@@ -35,7 +35,7 @@ window.addEventListener('load', function() {
       output.textContent = JSON.stringify(identifiers, null, 2);
 
     } catch (err) {
-      output.textContent = err.stack;
+      output.textContent = err.stack || err;
     }
   };
 
