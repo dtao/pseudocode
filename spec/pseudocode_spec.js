@@ -3,7 +3,6 @@ var specHelper = require('./spec_helper.js');
 describe('Pseudocode', function() {
   var binarySearch = specHelper.loadFile('./samples/binarySearch.js');
   var countingSort = specHelper.loadFile('./samples/countingSort.js');
-  var set = specHelper.loadFile('./samples/set.js');
 
   describe('getIdentifiers', function() {
     describe('binary search example', function() {
