@@ -26,7 +26,9 @@ function throttle(fn, delay) {
 
 window.addEventListener('load', function() {
   var output = document.getElementById('output');
-  var editor = CodeMirror.fromTextArea(document.getElementById('source'));
+  var editor = CodeMirror.fromTextArea(document.getElementById('source'), {
+    theme: 'ambiance'
+  });
 
   var handleChange = function(e, obj) {
     try {
@@ -40,5 +42,5 @@ window.addEventListener('load', function() {
     }
   };
 
-  editor.on('change', throttle(handleChange, 500));
+  editor.on('change', throttle(handleChange, 1500));
 });
