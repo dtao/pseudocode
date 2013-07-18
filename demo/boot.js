@@ -33,6 +33,7 @@ window.addEventListener('load', function() {
       var program = Pseudocode.fromJavaScript(editor.getValue()).program;
       var identifiers = program.getIdentifiers(true);
       output.textContent = JSON.stringify(identifiers, null, 2);
+      hljs.highlightBlock(output);
 
     } catch (err) {
       output.textContent = err.stack || err;

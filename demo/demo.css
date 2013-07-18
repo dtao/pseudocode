@@ -14,6 +14,7 @@ html, body {
   margin-right: 5px;
   height: auto;
   border: 1px solid black;
+  font-family: Inconsolata, monospace;
 }
 
 .CodeMirror-scroll {
@@ -36,8 +37,4 @@ html, body {
   padding: 10px;
   background-color: #eee;
   overflow: auto;
-}
-
-.CodeMirror, pre {
-  font-family: Inconsolata, monospace;
 }
