@@ -33,6 +33,11 @@ html, body {
   right: 10px;
   margin: 0;
   margin-left: 5px;
-  padding: 0;
+  padding: 10px;
   background-color: #eee;
+  overflow: auto;
+}
+
+.CodeMirror, pre {
+  font-family: Inconsolata, monospace;
 }
