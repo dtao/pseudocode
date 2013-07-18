@@ -345,7 +345,7 @@
     this.eachChildInScope(function(child) {
       var data = {};
 
-      if (child instanceof Pseudocode.FunctionDeclaration) {
+      if (child instanceof Pseudocode.FunctionDeclaration || child instanceof Pseudocode.FunctionExpression) {
         data = identifiers[child.id.name] = { dataType: child.id.getDataType().toString() };
 
       } else if (child instanceof Pseudocode.Identifier) {
@@ -898,8 +898,29 @@
 
   Pseudocode.Functional.extend(Pseudocode.FunctionExpression);
 
+  Pseudocode.FunctionExpression.prototype.initialize = function() {
+    Pseudocode.Functional.initialize.call(this);
+
+    // For anonymous functions...
+    if (!this.id) {
+      // If this is part of a statement like:
+      // var f = function() {}
+      if (this.parent instanceof Pseudocode.VariableDeclarator) {
+        // ...then we'll set the variable name as this function's ID.
+        this.id = this.parent.id;
+
+      } else {
+        // Otherwise, let's just say it's anonymous.
+        this.id = new Pseudocode.Identifier({
+          type: 'Identifier',
+          name: '(anonymous)'
+        });
+      }
+    }
+  };
+
   Pseudocode.FunctionExpression.prototype.inferDataType = function() {
-    return this.dataType;
+    return this.dataType || 'function';
   };
 
   if (typeof module !== 'undefined') {
