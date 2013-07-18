@@ -684,6 +684,10 @@ Pseudocode.UnaryExpression.prototype.inferDataType = function() {
     case '!':
       return 'bool';
 
+    case '-':
+    case '+':
+      return 'int';
+
     default:
       this.fail('Type inference not implemented for operator ' + this.operator);
   }
