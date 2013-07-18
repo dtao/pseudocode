@@ -67,6 +67,10 @@
       self.scope   = parent && parent.getChildScope() || self.createScope();
       self.program = parent && parent.program || self;
 
+      if (typeof self.initialize === 'function') {
+        self.initialize();
+      }
+
       var children = [];
       var childSelectors = self.getChildSelectors();
       Lazy(childSelectors).each(function(selector) {
@@ -94,8 +98,8 @@
         self[property] = rawNode[property];
       });
 
-      if (typeof self.initialize === 'function') {
-        self.initialize();
+      if (typeof self.finalize === 'function') {
+        self.finalize();
       }
 
       self.getDataType();
@@ -171,7 +175,7 @@
   /**
    * An optional callback to be invoked when a node is created.
    */
-  Pseudocode.Node.prototype.initialize = function() {
+  Pseudocode.Node.prototype.finalize = function() {
   };
 
   /**
@@ -407,7 +411,9 @@
    * @return {string} The name of this type of node.
    */
   Pseudocode.Node.prototype.toString = function() {
-    return 'Pseudocode.' + this.rawNode.type;
+    return this.id ?
+      this.id.name + ': Pseudocode.' + this.rawNode.type :
+      'Pseudocode.' + this.rawNode.type;
   };
 
   /**
@@ -515,7 +521,9 @@
   };
 
   Pseudocode.FunctionType.prototype.toString = function() {
-    return 'func<' + this.returnType + '>';
+    return this.returnType ?
+      'func<' + this.returnType + '>' :
+      'function';
   };
 
   /**
@@ -530,7 +538,9 @@
   };
 
   Pseudocode.CollectionType.prototype.toString = function() {
-    return 'array<' + this.elementType + '>';
+    return this.elementType ?
+      'array<' + this.elementType + '>' :
+      'array';
   };
 
   var nodeTypes = {
@@ -585,7 +595,7 @@
   });
 
   Pseudocode.Program.prototype.initialize = function() {
-    this.identifiers = {};
+    this.allIdentifiers = {};
   };
 
   // Intended to be used as a mix-in for FunctionDeclaration and FunctionExpression types
@@ -595,7 +605,7 @@
     return this.createScope();
   };
 
-  Pseudocode.Functional.initialize = function() {
+  Pseudocode.Functional.finalize = function() {
     if (this.id) {
       this.scope.registerIdentifier(this.id);
     }
@@ -652,17 +662,17 @@
 
   Pseudocode.Functional.extend(Pseudocode.FunctionDeclaration);
 
-  Pseudocode.VariableDeclarator.prototype.initialize = function() {
+  Pseudocode.VariableDeclarator.prototype.finalize = function() {
     this.scope.registerIdentifier(this.id);
     if (this.init) {
       this.scope.registerIdentifierType(this.id, this.init.getDataType());
     }
   };
 
-  Pseudocode.Identifier.prototype.initialize = function() {
-    var scopes = this.program.identifiers[this.name] || [];
-    scopes.push('' + this.scope);
-    this.program.identifiers[this.name] = scopes;
+  Pseudocode.Identifier.prototype.finalize = function() {
+    var data = this.program.allIdentifiers[this.name] || { scopes: [] };
+    data.scopes.push('' + this.scope);
+    this.program.allIdentifiers[this.name] = data;
   };
 
   Pseudocode.Identifier.prototype.getDataType = function() {
@@ -687,6 +697,10 @@
     return false;
   };
 
+  Pseudocode.Identifier.prototype.toString = function() {
+    return this.type + ' "' + this.name + '"';
+  };
+
   Pseudocode.Literal.prototype.inferDataType = function() {
     switch (typeof this.value) {
       case 'string': return 'string';
@@ -702,7 +716,7 @@
     return this.scope.getDataType();
   };
 
-  Pseudocode.AssignmentExpression.prototype.initialize = function() {
+  Pseudocode.AssignmentExpression.prototype.finalize = function() {
     switch (this.operator) {
       // These operators only make sense for integers.
       case '-=':
@@ -754,7 +768,7 @@
     }
   };
 
-  Pseudocode.BinaryExpression.prototype.initialize = function() {
+  Pseudocode.BinaryExpression.prototype.finalize = function() {
     switch (this.operator) {
       // TODO: implement type deduction w/ multiple possibilities
       // (i.e., this could really be a string)
@@ -823,7 +837,7 @@
     return 'object';
   };
 
-  Pseudocode.UpdateExpression.prototype.initialize = function() {
+  Pseudocode.UpdateExpression.prototype.finalize = function() {
     switch (this.operator) {
       case '--':
       case '++':
@@ -843,7 +857,7 @@
     }
   };
 
-  Pseudocode.MemberExpression.prototype.initialize = function() {
+  Pseudocode.MemberExpression.prototype.finalize = function() {
     if (this.object instanceof Pseudocode.Identifier) {
       if (this.computed && this.property.getDataType() === 'int') {
         this.scope.registerIdentifierType(this.object, 'array');
@@ -863,7 +877,7 @@
     }
   };
 
-  Pseudocode.CallExpression.prototype.initialize = function() {
+  Pseudocode.CallExpression.prototype.finalize = function() {
     // TODO: Refactor this into something actually sensible.
     // For now, this is just a POC to demonstrate that we could infer the element
     // type for a collection based on what is passed to #push.
@@ -910,8 +924,8 @@
 
   Pseudocode.Functional.extend(Pseudocode.FunctionExpression);
 
-  Pseudocode.FunctionExpression.prototype.initialize = function() {
-    Pseudocode.Functional.initialize.call(this);
+  Pseudocode.FunctionExpression.prototype.finalize = function() {
+    Pseudocode.Functional.finalize.call(this);
 
     // For anonymous functions...
     if (!this.id) {
