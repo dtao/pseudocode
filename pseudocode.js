@@ -688,6 +688,10 @@
       return true;
     }
 
+    if (this.parent instanceof Pseudocode.FunctionExpression) {
+      return true;
+    }
+
     if (this.parent instanceof Pseudocode.VariableDeclarator) {
       if (this === this.parent.id) {
         return true;
