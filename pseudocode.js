@@ -18,6 +18,8 @@
     throw 'Unable to load Lazy.js';
   }
 
+  var anonymousFunctionIndex = 1;
+
   /**
    * An abstract representation of a program.
    *
@@ -256,7 +258,31 @@
     }
 
     if (dataType === 'object') {
-      return;
+      return false;
+    }
+
+    // Don't replace a strongly-typed function w/ 'function'.
+    if (dataType === 'function') {
+      if (this.getTypeForIdentifier(identifier) instanceof Pseudocode.FunctionType) {
+        return false;
+      }
+    }
+
+    // But DO replace 'function' w/ a strongly-typed function type
+    if (this.getTypeForIdentifier(identifier) === 'function' && dataType instanceof Pseudocode.FunctionType) {
+      this.clearTypesForIdentifier(identifier);
+    }
+
+    // Similarly, don't replace a strongly-typed collection w/ 'array'.
+    if (dataType === 'array') {
+      if (this.getTypeForIdentifier(identifier) instanceof Pseudocode.CollectionType) {
+        return false;
+      }
+    }
+
+    // But DO replace 'array' w/ a strongly-typed collection type
+    if (this.getTypeForIdentifier(identifier) === 'array' && dataType instanceof Pseudocode.CollectionType) {
+      this.clearTypesForIdentifier(identifier);
     }
 
     var typeList = this.identifierTypes[identifier.name];
@@ -264,21 +290,7 @@
       typeList = this.identifierTypes[identifier.name] = new Pseudocode.SetList();
     }
 
-    // Don't replace a strongly-typed function w/ 'function'.
-    if (dataType === 'function') {
-      if (this.getTypeForIdentifier(identifier) instanceof Pseudocode.FunctionType) {
-        return;
-      }
-    }
-
-    // Similarly, don't replace a strongly-typed collection w/ 'array'.
-    if (dataType === 'array') {
-      if (this.getTypeForIdentifier(identifier) instanceof Pseudocode.CollectionType) {
-        return;
-      }
-    }
-
-    typeList.push(dataType);
+    return typeList.push(dataType);
   };
 
   /**
@@ -288,14 +300,10 @@
    * @param {string=} returnType The name of the return type.
    */
   Pseudocode.Node.prototype.registerFunctionReturnType = function(identifier, returnType) {
-    if (this.getTypeForIdentifier(identifier) === 'function') {
-      this.clearTypesForIdentifier(identifier);
-    }
-
     var returnType = returnType ?
       new Pseudocode.FunctionType(returnType) : 'function';
 
-    this.registerIdentifierType(identifier, returnType);
+    return this.registerIdentifierType(identifier, returnType);
   };
 
   /**
@@ -314,7 +322,7 @@
     var collectionType = options.elementType ?
       new Pseudocode.CollectionType(options.elementType) : 'array';
 
-    this.registerIdentifierType(identifier, collectionType);
+    return this.registerIdentifierType(identifier, collectionType);
   };
 
   /**
@@ -326,7 +334,19 @@
    * @return {string} The known data type for the identifier, if available.
    */
   Pseudocode.Node.prototype.getTypeForIdentifier = function(identifier) {
-    var typeList = this.identifierTypes[identifier.name];
+    var scope = this;
+
+    var typeList = scope.identifierTypes[identifier.name];
+
+    while (typeof typeList === 'undefined') {
+      scope = scope.scope;
+      typeList = scope.identifierTypes[identifier.name];
+
+      if (scope === scope.scope) {
+        break;
+      }
+    }
+
     return typeList && typeList.length === 1 && typeList.get(0);
   };
 
@@ -354,11 +374,11 @@
       var data = {};
 
       if (child instanceof Pseudocode.FunctionDeclaration || child instanceof Pseudocode.FunctionExpression) {
-        data = identifiers[child.id.name] = { dataType: child.id.getDataType().toString() };
+        data = identifiers[child.id.name] = { dataType: child.id.getDataType() };
 
       } else if (child instanceof Pseudocode.Identifier) {
         if (child.isDefinedHere()) {
-          data = identifiers[child.name] = { dataType: child.getDataType().toString() };
+          data = identifiers[child.name] = { dataType: child.getDataType() };
         }
       }
 
@@ -606,6 +626,52 @@
     this.allIdentifiers = {};
   };
 
+  Pseudocode.Program.prototype.finalize = function() {
+    var typesInferred;
+
+    do {
+      typesInferred = 0;
+
+      this.eachDescendent(function(node) {
+        var registeredType, inferredDataType;
+
+        if (node instanceof Pseudocode.VariableDeclarator && node.init) {
+          registeredType = node.id.getDataType();
+          inferredDataType = node.init.inferDataType();
+          if (!typesAreEqual(registeredType, inferredDataType)) {
+            if (node.id.registerDataType(inferredDataType)) {
+              ++typesInferred;
+            }
+            return;
+          }
+        }
+
+        if (node instanceof Pseudocode.AssignmentExpression && node.left instanceof Pseudocode.Identifier) {
+          registeredType = node.left.getDataType();
+          inferredDataType = node.right.inferDataType();
+          if (!typesAreEqual(registeredType, inferredDataType)) {
+            if (node.left.registerDataType(inferredDataType)) {
+              ++typesInferred;
+            }
+            return;
+          }
+        }
+
+        if (node.isFunction()) {
+          registeredType = node.id.getDataType();
+          inferredDataType = node.inferDataType();
+          if (!typesAreEqual(registeredType, inferredDataType)) {
+            if (node.id.registeredDataType(inferredDataType)) {
+              ++typesInferred;
+            }
+            return;
+          }
+        }
+      });
+
+    } while (typesInferred > 0);
+  };
+
   // Intended to be used as a mix-in for FunctionDeclaration and FunctionExpression types
   Pseudocode.Functional = {};
 
@@ -620,11 +686,9 @@
     if (this.id) {
       this.id.scope = this.scope;
     }
-
-    this.tryToInferType();
   };
 
-  Pseudocode.Functional.tryToInferType = function() {
+  Pseudocode.Functional.inferDataType = function() {
     var self = this,
         returnTypes = new Pseudocode.SetList();
 
@@ -647,9 +711,9 @@
       returnTypes.push('void');
     }
 
-    if (returnTypes.length === 1) {
-      this.dataType = new Pseudocode.FunctionType(returnTypes.get(0));
-    }
+    var returnType = returnTypes.length === 1 ? returnTypes.get(0) : 'object';
+
+    return new Pseudocode.FunctionType(returnType);
   };
 
   Pseudocode.Functional.extend = function(type) {
@@ -694,7 +758,7 @@
   };
 
   Pseudocode.Identifier.prototype.inferDataType = function() {
-    return this.scope.getTypeForIdentifier(this) || 'object';
+    return this.definingScope().getTypeForIdentifier(this) || 'object';
   };
 
   Pseudocode.Identifier.prototype.isDefinedHere = function() {
@@ -721,6 +785,10 @@
       scope = scope.scope;
     }
     return scope;
+  };
+
+  Pseudocode.Identifier.prototype.registerDataType = function(dataType) {
+    return this.definingScope().registerIdentifierType(this, dataType);
   };
 
   Pseudocode.Identifier.prototype.toString = function() {
@@ -965,17 +1033,21 @@
 
       } else {
         // Otherwise, let's just say it's anonymous.
-        this.id = new Pseudocode.Identifier({
+        this.id = this.wrapChild({
           type: 'Identifier',
-          name: '(anonymous)'
+          name: getAnonymousFunctionName()
         });
       }
     }
   };
 
-  Pseudocode.FunctionExpression.prototype.inferDataType = function() {
-    return this.dataType || 'function';
-  };
+  function getAnonymousFunctionName() {
+    return '(anonymous ' + (anonymousFunctionIndex++) + ')';
+  }
+
+  function typesAreEqual(x, y) {
+    return String(x) === String(y);
+  }
 
   if (typeof module !== 'undefined') {
     module.exports = Pseudocode;

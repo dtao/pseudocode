@@ -40,7 +40,7 @@ beforeEach(function() {
             return;
           }
 
-          if (actualData.dataType !== type) {
+          if (String(actualData.dataType) !== String(type)) {
             mismatches.push('Expected ' + formatName(name) + ' to have type ' + type +
               ' (was ' + actualData.dataType + ')');
           }
