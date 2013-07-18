@@ -424,7 +424,7 @@
       message += '\n\nNode:\n' + JSON.stringify(node, null, 2).substring(0, 1000);
     }
 
-    throw message;
+    throw new Error(message);
   };
 
   /**
