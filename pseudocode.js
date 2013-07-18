@@ -65,6 +65,7 @@
       self.type    = rawNode && rawNode.type;
       self.parent  = parent;
       self.scope   = parent && parent.getChildScope() || self.createScope();
+      self.program = parent && parent.program || self;
 
       var children = [];
       var childSelectors = self.getChildSelectors();
@@ -583,6 +584,10 @@
     });
   });
 
+  Pseudocode.Program.prototype.initialize = function() {
+    this.identifiers = {};
+  };
+
   // Intended to be used as a mix-in for FunctionDeclaration and FunctionExpression types
   Pseudocode.Functional = {};
 
@@ -652,6 +657,12 @@
     if (this.init) {
       this.scope.registerIdentifierType(this.id, this.init.getDataType());
     }
+  };
+
+  Pseudocode.Identifier.prototype.initialize = function() {
+    var scopes = this.program.identifiers[this.name] || [];
+    scopes.push('' + this.scope);
+    this.program.identifiers[this.name] = scopes;
   };
 
   Pseudocode.Identifier.prototype.getDataType = function() {
