@@ -1069,6 +1069,9 @@
   // These would be private functions, but I want to expose them to specs.
 
   Pseudocode.typesAreEqual = function(x, y) {
+    if (typeof x !== typeof y) {
+      return false;
+    }
     return String(x) === String(y);
   };
 

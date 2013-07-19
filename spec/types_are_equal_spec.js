@@ -14,6 +14,10 @@ describe('Pseudocode', function() {
       expect(result('string', 'int')).toBe(false);
     });
 
+    it('the string "array" is not the same as a strongly-typed collection type with no element type', function() {
+      expect(result('array', new Pseudocode.CollectionType())).toBe(false);
+    });
+
     it('collection types with the same element type are equal', function() {
       var collectionType1 = new Pseudocode.CollectionType('string');
       var collectionType2 = new Pseudocode.CollectionType('string');
@@ -24,6 +28,10 @@ describe('Pseudocode', function() {
       var collectionType1 = new Pseudocode.CollectionType('string');
       var collectionType2 = new Pseudocode.CollectionType('int');
       expect(result(collectionType1, collectionType2)).toBe(false);
+    });
+
+    it('the string "function" is not the same as a strongly-typed function type with no return type', function() {
+      expect(result('function', new Pseudocode.FunctionType())).toBe(false);
     });
 
     it('function types with the same return types are equal', function() {
