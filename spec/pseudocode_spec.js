@@ -48,10 +48,10 @@ describe('Pseudocode', function() {
             ]
           ],
           [
-            'minMax', 'func<array<int>>', [
-              ['array', 'array<int>'],
-              ['min', 'int'],
-              ['max', 'int'],
+            'minMax', 'func<array<int|string>>', [
+              ['array', 'array<int|string>'],
+              ['min', 'int|string'],
+              ['max', 'int|string'],
               ['i', 'int']
             ]
           ]

@@ -500,15 +500,16 @@
       dataType = new Pseudocode.AmbiguousType(dataType);
     }
     if (this instanceof Pseudocode.Identifier) {
-      this.definingScope().registerIdentifierType(this, dataType);
+      return this.registerDataType(dataType);
     }
     if (this instanceof Pseudocode.MemberExpression && this.object instanceof Pseudocode.Identifier) {
       if (this.computed && this.property.getDataType() === 'int') {
-        this.object.definingScope().registerCollectionType(this.object, {
+        return this.object.definingScope().registerCollectionType(this.object, {
           elementType: dataType
         });
       }
     }
+    return false;
   };
 
   /**
@@ -764,13 +765,18 @@
         if (node instanceof Pseudocode.VariableDeclarator && node.init) {
           registeredType = node.id.getDataType();
           inferredDataType = node.init.inferDataType();
-          if (!Pseudocode.typesAreEqual(registeredType, inferredDataType)) {
-            // console.log('Considering updating ' + node.id.name + ' to ' + inferredDataType + '...');
-            if (node.id.registerDataType(inferredDataType)) {
-              // console.log('Updating ' + node.id.name + ' from ' + registeredType + ' to ' + inferredDataType);
-              ++typesInferred;
-            }
-            return;
+          switch (Pseudocode.compareTypes(registeredType, inferredDataType)) {
+            case -1:
+              if (node.id.registerDataType(inferredDataType)) {
+                ++typesInferred;
+              }
+              return;
+
+            case 1:
+              if (node.init.probableDataType(registeredType)) {
+                ++typesInferred;
+              }
+              return;
           }
         }
 
@@ -778,9 +784,7 @@
           registeredType = node.left.getDataType();
           inferredDataType = node.right.inferDataType();
           if (!Pseudocode.typesAreEqual(registeredType, inferredDataType)) {
-            // console.log('Considering updating ' + node.left.name + ' to ' + inferredDataType + '...');
             if (node.left.registerDataType(inferredDataType)) {
-              // console.log('Updating ' + node.left.name + ' from ' + registeredType + ' to ' + inferredDataType);
               ++typesInferred;
             }
             return;
@@ -791,9 +795,7 @@
           registeredType = node.id.getDataType();
           inferredDataType = node.inferDataType();
           if (!Pseudocode.typesAreEqual(registeredType, inferredDataType)) {
-            // console.log('Considering updating ' + node.id.name + ' to ' + inferredDataType + '...');
             if (node.id.registerDataType(inferredDataType)) {
-              // console.log('Updating ' + node.id.name + ' from ' + registeredType + ' to ' + inferredDataType);
               ++typesInferred;
             }
             return;
@@ -953,7 +955,15 @@
         break;
 
       default:
-        this.left.probableDataType(this.right.getDataType());
+        switch (Pseudocode.compareTypes(this.left.getDataType(), this.right.getDataType())) {
+          case 1:
+            this.right.probableDataType(this.left.getDataType());
+            break;
+
+          case -1:
+            this.left.probableDataType(this.right.getDataType());
+            break;
+        }
     }
   };
 
@@ -1143,10 +1153,9 @@
   Pseudocode.ArrayExpression.prototype.inferDataType = function() {
     var elementTypes = Lazy(this.elements)
       .map(function(node) { return node.getDataType() })
-      .uniq()
       .toArray();
 
-    if (elementTypes.length === 1) {
+    if (uniqueTypes(elementTypes).length === 1) {
       return new Pseudocode.CollectionType(elementTypes[0]);
     }
 
@@ -1190,6 +1199,20 @@
         return true;
       }
     }
+  }
+
+  function uniqueTypes(types) {
+    var names  = [],
+        result = [];
+
+    for (var i = 0; i < types.length; ++i) {
+      if (!arrayContains(names, String(types[i]))) {
+        names.push(String(types[i]));
+        result.push(types[i]);
+      }
+    }
+
+    return result;
   }
 
   // These would be private functions, but I want to expose them to specs.
