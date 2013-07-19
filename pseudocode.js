@@ -568,6 +568,11 @@
   };
 
   /**
+   * Serves as an abstract base for data types.
+   */
+  Pseudocode.Type = function() {};
+
+  /**
    * Represents a function along with its return type.
    *
    * @param {string} returnType The return type of the function.
@@ -576,6 +581,18 @@
   Pseudocode.FunctionType = function(returnType) {
     this.functionType = 'function';
     this.returnType = returnType;
+  };
+
+  Pseudocode.FunctionType.prototype = new Pseudocode.Type();
+
+  Pseudocode.FunctionType.prototype.compareTo = function(other) {
+    if (other === 'function') {
+      return 1;
+    }
+    if (!(other instanceof Pseudocode.FunctionType)) {
+      return 0;
+    }
+    return Pseudocode.compareTypes(this.returnType, other.returnType);
   };
 
   Pseudocode.FunctionType.prototype.toString = function() {
@@ -595,10 +612,43 @@
     this.elementType = elementType;
   };
 
+  Pseudocode.CollectionType.prototype = new Pseudocode.Type();
+
+  Pseudocode.CollectionType.prototype.compareTo = function(other) {
+    if (other === 'array') {
+      return 1;
+    }
+    if (!(other instanceof Pseudocode.CollectionType)) {
+      return 0;
+    }
+    return Pseudocode.compareTypes(this.elementType, other.elementType);
+  };
+
   Pseudocode.CollectionType.prototype.toString = function() {
     return this.elementType ?
       'array<' + this.elementType + '>' :
       'array';
+  };
+
+  /**
+   * Represents a set of more than one possible type for an expression (e.g.,
+   * either an int or a string).
+   *
+   * @param {Array} options
+   * @constructor
+   */
+  Pseudocode.AmbiguousType = function(options) {
+    this.options = options;
+  };
+
+  Pseudocode.AmbiguousType.prototype = new Pseudocode.Type();
+
+  Pseudocode.AmbiguousType.prototype.compareTo = function(other) {
+    throw new Error('have no implemented AmbiguousType#compareTo yet');
+  };
+
+  Pseudocode.AmbiguousType.prototype.toString = function() {
+    return this.options.join('|');
   };
 
   var nodeTypes = {
@@ -863,10 +913,8 @@
 
   Pseudocode.AssignmentExpression.prototype.inferDataType = function() {
     switch (this.operator) {
-      // TODO: implement type deduction w/ multiple possibilities
-      // (i.e., this could really be a string)
       case '+=':
-        return 'int'; // or string
+        return ['int', 'string'];
 
       case '-=':
       case '*=':
@@ -900,15 +948,13 @@
 
   Pseudocode.BinaryExpression.prototype.finalize = function() {
     switch (this.operator) {
-      // TODO: implement type deduction w/ multiple possibilities
-      // (i.e., this could really be a string)
       case '+':
       case '<':
       case '>':
       case '<=':
       case '>=':
-        this.left.probableDataType('int');
-        this.right.probableDataType('int');
+        this.left.probableDataType(['int', 'string']);
+        this.right.probableDataType(['int', 'string']);
         break;
 
       case '-':
@@ -927,10 +973,8 @@
 
   Pseudocode.BinaryExpression.prototype.inferDataType = function() {
     switch (this.operator) {
-      // TODO: implement type deduction w/ multiple possibilities
-      // (i.e., this could really be a string)
       case '+':
-        return 'int'; // or string
+        return ['int', 'string'];
 
       case '-':
       case '*':
@@ -1097,20 +1141,11 @@
     if (left !== 'object' && right === 'object') {
       return 1;
     }
-    if (left === 'array' && right instanceof Pseudocode.CollectionType) {
-      return -1;
+    if (left instanceof Pseudocode.Type) {
+      return left.compareTo(right);
     }
-    if (left instanceof Pseudocode.CollectionType && right === 'array') {
-      return 1;
-    }
-    if (left === 'function' && right instanceof Pseudocode.FunctionType) {
-      return -1;
-    }
-    if (left instanceof Pseudocode.FunctionType && right === 'function') {
-      return 1;
-    }
-    if (left instanceof Pseudocode.FunctionType && right instanceof Pseudocode.FunctionType) {
-      return Pseudocode.compareTypes(left.returnType, right.returnType);
+    if (right instanceof Pseudocode.Type) {
+      return right.compareTo(left) * -1;
     }
     return 0;
   };
