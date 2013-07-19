@@ -272,33 +272,20 @@
       return typesRegistered > 0;
     }
 
-    // Don't replace a strongly-typed function w/ 'function'.
-    if (dataType === 'function') {
-      if (this.getTypeForIdentifier(identifier) instanceof Pseudocode.FunctionType) {
-        return false;
-      }
-    }
-
-    // But DO replace 'function' w/ a strongly-typed function type
-    if (this.getTypeForIdentifier(identifier) === 'function' && dataType instanceof Pseudocode.FunctionType) {
-      this.clearTypesForIdentifier(identifier);
-    }
-
-    // Similarly, don't replace a strongly-typed collection w/ 'array'.
-    if (dataType === 'array') {
-      if (this.getTypeForIdentifier(identifier) instanceof Pseudocode.CollectionType) {
-        return false;
-      }
-    }
-
-    // But DO replace 'array' w/ a strongly-typed collection type
-    if (this.getTypeForIdentifier(identifier) === 'array' && dataType instanceof Pseudocode.CollectionType) {
-      this.clearTypesForIdentifier(identifier);
-    }
-
     var typeList = this.identifierTypes[identifier.name];
     if (!typeList) {
       typeList = this.identifierTypes[identifier.name] = new Pseudocode.SetList();
+    }
+
+    if (typeList.length === 1) {
+      switch (Pseudocode.compareTypes(dataType, typeList.get(0))) {
+        case 1:
+          this.clearTypesForIdentifier(identifier);
+          break;
+
+        case -1:
+          return false;
+      }
     }
 
     return typeList.push(dataType);
@@ -358,7 +345,7 @@
       }
     }
 
-    return typeList && typeList.length > 1 && typeList.join('|');
+    return typeList && typeList.length > 0 && typeList.join('|');
   };
 
   /**
@@ -367,7 +354,10 @@
    * @param {Pseudocode.Identifier} identifier The identifier to clear.
    */
   Pseudocode.Node.prototype.clearTypesForIdentifier = function(identifier) {
-    delete this.identifierTypes[identifier.name];
+    var typeList = this.identifierTypes[identifier.name];
+    if (typeList) {
+      typeList.clear();
+    }
   };
 
   /**
@@ -516,6 +506,13 @@
    * @constructor
    */
   Pseudocode.SetList = function() {
+    this.clear();
+  };
+
+  /**
+   * Clears the list of all elements.
+   */
+  Pseudocode.SetList.prototype.clear = function() {
     this.set    = {};
     this.list   = [];
     this.length = 0;
@@ -662,7 +659,7 @@
         if (node instanceof Pseudocode.VariableDeclarator && node.init) {
           registeredType = node.id.getDataType();
           inferredDataType = node.init.inferDataType();
-          if (!typesAreEqual(registeredType, inferredDataType)) {
+          if (!Pseudocode.typesAreEqual(registeredType, inferredDataType)) {
             if (node.id.registerDataType(inferredDataType)) {
               ++typesInferred;
             }
@@ -673,7 +670,7 @@
         if (node instanceof Pseudocode.AssignmentExpression && node.left instanceof Pseudocode.Identifier) {
           registeredType = node.left.getDataType();
           inferredDataType = node.right.inferDataType();
-          if (!typesAreEqual(registeredType, inferredDataType)) {
+          if (!Pseudocode.typesAreEqual(registeredType, inferredDataType)) {
             if (node.left.registerDataType(inferredDataType)) {
               ++typesInferred;
             }
@@ -684,7 +681,7 @@
         if (node.isFunction()) {
           registeredType = node.id.getDataType();
           inferredDataType = node.inferDataType();
-          if (!typesAreEqual(registeredType, inferredDataType)) {
+          if (!Pseudocode.typesAreEqual(registeredType, inferredDataType)) {
             if (node.id.registerDataType(inferredDataType)) {
               ++typesInferred;
             }
@@ -1069,9 +1066,38 @@
     return '(anonymous ' + (anonymousFunctionIndex++) + ')';
   }
 
-  function typesAreEqual(x, y) {
+  // These would be private functions, but I want to expose them to specs.
+
+  Pseudocode.typesAreEqual = function(x, y) {
     return String(x) === String(y);
-  }
+  };
+
+  Pseudocode.compareTypes = function(left, right) {
+    if (left === 'object' && right !== 'object') {
+      return -1;
+    }
+    if (left !== 'object' && right === 'object') {
+      return 1;
+    }
+    if (left === 'array' && right instanceof Pseudocode.CollectionType) {
+      return -1;
+    }
+    if (left instanceof Pseudocode.CollectionType && right === 'array') {
+      return 1;
+    }
+    if (left === 'function' && right instanceof Pseudocode.FunctionType) {
+      return -1;
+    }
+    if (left instanceof Pseudocode.FunctionType && right === 'function') {
+      return 1;
+    }
+    if (left instanceof Pseudocode.FunctionType && right instanceof Pseudocode.FunctionType) {
+      return Pseudocode.compareTypes(left.returnType, right.returnType);
+    }
+    return 0;
+  };
+
+  // Finally, expose Pseudocode to the environment.
 
   if (typeof module !== 'undefined') {
     module.exports = Pseudocode;

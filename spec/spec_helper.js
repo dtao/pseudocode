@@ -72,5 +72,6 @@ beforeEach(function() {
 });
 
 module.exports = {
+  Pseudocode: Pseudocode,
   loadFile: loadFile
 };
