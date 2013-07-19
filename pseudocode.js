@@ -644,7 +644,34 @@
   Pseudocode.AmbiguousType.prototype = new Pseudocode.Type();
 
   Pseudocode.AmbiguousType.prototype.compareTo = function(other) {
-    throw new Error('have no implemented AmbiguousType#compareTo yet');
+    if (typeof other === 'string') {
+      return arrayContains(this.options, other) ? -1 : 0;
+    }
+    if (other instanceof Pseudocode.AmbiguousType) {
+      return this.compareToAmbiguousType(other);
+    }
+    return 0;
+  };
+
+  Pseudocode.AmbiguousType.prototype.compareToAmbiguousType = function(other) {
+    var intersection = Lazy(this.options).intersection(other.options).toArray();
+    if (intersection.length === this.options.length) {
+      if (other.options.length > this.options.length) {
+        // this is a subset of other
+        return 1;
+
+      } else {
+        // this and other have the same options
+        return 0;
+      }
+
+    } else if (intersection.length === other.options.length) {
+      // other is a subset of this
+      return -1;
+    }
+
+    // this and other each has element(s) the other doesn't have
+    return 0;
   };
 
   Pseudocode.AmbiguousType.prototype.toString = function() {
@@ -1123,6 +1150,14 @@
 
   function getAnonymousFunctionName() {
     return '(anonymous ' + (anonymousFunctionIndex++) + ')';
+  }
+
+  function arrayContains(array, element) {
+    for (var i = 0; i < array.length; ++i) {
+      if (array[i] === element) {
+        return true;
+      }
+    }
   }
 
   // These would be private functions, but I want to expose them to specs.

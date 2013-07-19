@@ -53,5 +53,25 @@ describe('Pseudocode', function() {
         expect(result(strongestType, strongerType)).toEqual(1);
       });
     });
+
+    describe('for ambiguous types', function() {
+      var weakType = new Pseudocode.AmbiguousType(['string', 'int', 'bool']);
+      var strongType = new Pseudocode.AmbiguousType(['string', 'int']);
+      var otherType = new Pseudocode.AmbiguousType(['string', 'bool']);
+
+      it('a string overrides an ambiguous type whose possibilities include that string', function() {
+        expect(result('string', weakType)).toEqual(1);
+        expect(result(weakType, 'string')).toEqual(-1);
+      });
+
+      it('an ambiguous type w/ 2 possibilities overrides one with those same 2 + another', function() {
+        expect(result(strongType, weakType)).toEqual(1);
+        expect(result(weakType, strongType)).toEqual(-1);
+      });
+
+      it('two ambiguous types with different options are treated as equal', function() {
+        expect(result(strongType, otherType)).toEqual(0);
+      });
+    });
   });
 });
