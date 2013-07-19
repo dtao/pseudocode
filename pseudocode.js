@@ -345,7 +345,7 @@
       }
     }
 
-    return typeList && typeList.length > 0 && typeList.join('|');
+    return typeList && (typeList.length === 1 ? typeList.get(0) : typeList.toArray());
   };
 
   /**
@@ -547,6 +547,15 @@
   };
 
   /**
+   * Returns an array (copy) of the values in the set.
+   *
+   * @return {array} An array containing the values in the set.
+   */
+  Pseudocode.SetList.prototype.toArray = function() {
+    return this.list.slice(0);
+  };
+
+  /**
    * Returns a string concatenating all of the values in the list together with
    * the specified delimiter.
    *
@@ -660,7 +669,9 @@
           registeredType = node.id.getDataType();
           inferredDataType = node.init.inferDataType();
           if (!Pseudocode.typesAreEqual(registeredType, inferredDataType)) {
+            // console.log('Considering updating ' + node.id.name + ' to ' + inferredDataType + '...');
             if (node.id.registerDataType(inferredDataType)) {
+              console.log('Updating ' + node.id.name + ' from ' + registeredType + ' to ' + inferredDataType);
               ++typesInferred;
             }
             return;
@@ -671,7 +682,9 @@
           registeredType = node.left.getDataType();
           inferredDataType = node.right.inferDataType();
           if (!Pseudocode.typesAreEqual(registeredType, inferredDataType)) {
+            // console.log('Considering updating ' + node.left.name + ' to ' + inferredDataType + '...');
             if (node.left.registerDataType(inferredDataType)) {
+              console.log('Updating ' + node.left.name + ' from ' + registeredType + ' to ' + inferredDataType);
               ++typesInferred;
             }
             return;
@@ -682,7 +695,9 @@
           registeredType = node.id.getDataType();
           inferredDataType = node.inferDataType();
           if (!Pseudocode.typesAreEqual(registeredType, inferredDataType)) {
+            // console.log('Considering updating ' + node.id.name + ' to ' + inferredDataType + '...');
             if (node.id.registerDataType(inferredDataType)) {
+              console.log('Updating ' + node.id.name + ' from ' + registeredType + ' to ' + inferredDataType);
               ++typesInferred;
             }
             return;
