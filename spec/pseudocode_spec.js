@@ -6,18 +6,18 @@ describe('Pseudocode', function() {
 
   describe('getIdentifiers', function() {
     describe('binary search example', function() {
-      xit('provides a list of the identifiers under a given scope', function() {
+      it('provides a list of the identifiers under a given scope', function() {
         expect(binarySearch).toHaveIdentifiers(false, [
           ['binarySearch', 'func<int>']
         ]);
       });
 
-      xit('provides recursive access to all of the identifiers in a program', function() {
+      it('provides recursive access to all of the identifiers in a program', function() {
         expect(binarySearch).toHaveIdentifiers(true, [
           [
             'binarySearch', 'func<int>', [
-              ['haystack', 'array<int>'],
-              ['needle', 'int'],
+              ['haystack', 'array<int|string>'],
+              ['needle', 'int|string'],
               ['low', 'int'],
               ['high', 'int'],
               ['current', 'int']
@@ -28,7 +28,7 @@ describe('Pseudocode', function() {
     });
 
     describe('counting sort example', function() {
-      xit('provides recursive access to all the identifies in the program', function() {
+      it('provides recursive access to all the identifies in the program', function() {
         expect(countingSort).toHaveIdentifiers(true, [
           [
             'countingSort', 'func<array<int>>', [

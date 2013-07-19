@@ -262,14 +262,8 @@
       return false;
     }
 
-    var typesRegistered = 0;
     if (dataType instanceof Array) {
-      Lazy(dataType).each(function(type) {
-        if (identifier.registerDataType(type)) {
-          ++typesRegistered;
-        }
-      });
-      return typesRegistered > 0;
+      dataType = new Pseudocode.AmbiguousType(dataType);
     }
 
     var typeList = this.identifierTypes[identifier.name];
@@ -358,6 +352,20 @@
     if (typeList) {
       typeList.clear();
     }
+  };
+
+  /**
+   * Gets a specific identifier in the program.
+   *
+   * @param {string} name The name of the identifier.
+   * @return {object} The identifier.
+   */
+  Pseudocode.Node.prototype.getIdentifier = function(name) {
+    if (!this.identifiers) {
+      this.fail('no identifiers table');
+    }
+
+    return this.identifiers[name];
   };
 
   /**
@@ -488,6 +496,9 @@
    *     types, for the expression.
    */
   Pseudocode.Expression.prototype.probableDataType = function(dataType) {
+    if (dataType instanceof Array) {
+      dataType = new Pseudocode.AmbiguousType(dataType);
+    }
     if (this instanceof Pseudocode.Identifier) {
       this.definingScope().registerIdentifierType(this, dataType);
     }
@@ -579,6 +590,10 @@
    * @constructor
    */
   Pseudocode.FunctionType = function(returnType) {
+    if (returnType instanceof Array) {
+      returnType = new Pseudocode.AmbiguousType(returnType);
+    }
+
     this.functionType = 'function';
     this.returnType = returnType;
   };
@@ -608,6 +623,10 @@
    * @constructor
    */
   Pseudocode.CollectionType = function(elementType) {
+    if (elementType instanceof Array) {
+      elementType = new Pseudocode.AmbiguousType(elementType);
+    }
+
     this.collectionType = 'array';
     this.elementType = elementType;
   };
@@ -748,7 +767,7 @@
           if (!Pseudocode.typesAreEqual(registeredType, inferredDataType)) {
             // console.log('Considering updating ' + node.id.name + ' to ' + inferredDataType + '...');
             if (node.id.registerDataType(inferredDataType)) {
-              console.log('Updating ' + node.id.name + ' from ' + registeredType + ' to ' + inferredDataType);
+              // console.log('Updating ' + node.id.name + ' from ' + registeredType + ' to ' + inferredDataType);
               ++typesInferred;
             }
             return;
@@ -761,7 +780,7 @@
           if (!Pseudocode.typesAreEqual(registeredType, inferredDataType)) {
             // console.log('Considering updating ' + node.left.name + ' to ' + inferredDataType + '...');
             if (node.left.registerDataType(inferredDataType)) {
-              console.log('Updating ' + node.left.name + ' from ' + registeredType + ' to ' + inferredDataType);
+              // console.log('Updating ' + node.left.name + ' from ' + registeredType + ' to ' + inferredDataType);
               ++typesInferred;
             }
             return;
@@ -774,7 +793,7 @@
           if (!Pseudocode.typesAreEqual(registeredType, inferredDataType)) {
             // console.log('Considering updating ' + node.id.name + ' to ' + inferredDataType + '...');
             if (node.id.registerDataType(inferredDataType)) {
-              console.log('Updating ' + node.id.name + ' from ' + registeredType + ' to ' + inferredDataType);
+              // console.log('Updating ' + node.id.name + ' from ' + registeredType + ' to ' + inferredDataType);
               ++typesInferred;
             }
             return;
@@ -848,7 +867,7 @@
 
   Pseudocode.Identifier.prototype.initialize = function() {
     if (this.parent && this.parent.isFunction()) {
-      if (this === this.parent.id) {
+      if (this.rawNode === this.parent.rawNode.id) {
         this.parent.scope.registerIdentifier(this);
       } else {
         this.scope.registerIdentifier(this);
@@ -941,7 +960,7 @@
   Pseudocode.AssignmentExpression.prototype.inferDataType = function() {
     switch (this.operator) {
       case '+=':
-        return ['int', 'string'];
+        return new Pseudocode.AmbiguousType(['int', 'string']);
 
       case '-=':
       case '*=':
@@ -980,8 +999,16 @@
       case '>':
       case '<=':
       case '>=':
-        this.left.probableDataType(['int', 'string']);
-        this.right.probableDataType(['int', 'string']);
+        if (this.left.getDataType() === 'int' || this.left.getDataType() === 'string') {
+          this.right.probableDataType(this.left.getDataType());
+
+        } else if (this.right.getDataType() === 'int' || this.right.getDataType() === 'string') {
+          this.left.probableDataType(this.right.getDataType());
+
+        } else {
+          this.left.probableDataType(['int', 'string']);
+          this.right.probableDataType(['int', 'string']);
+        }
         break;
 
       case '-':
@@ -1001,7 +1028,12 @@
   Pseudocode.BinaryExpression.prototype.inferDataType = function() {
     switch (this.operator) {
       case '+':
-        return ['int', 'string'];
+        if (this.left.getDataType() === 'int' && this.right.getDataType() === 'int') {
+          return 'int';
+        } else if (this.left.getDataType() === 'string' && this.right.getDataType() === 'string') {
+          return 'string';
+        }
+        return new Pseudocode.AmbiguousType(['int', 'string']);
 
       case '-':
       case '*':

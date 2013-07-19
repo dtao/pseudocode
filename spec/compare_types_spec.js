@@ -14,7 +14,7 @@ describe('Pseudocode', function() {
 
     describe('for arrays', function() {
       var weakType = 'array';
-      var strongType = new Pseudocode.CollectionType({ elementType: 'string' });
+      var strongType = new Pseudocode.CollectionType('string');
 
       it('a strongly-typed array overrides plain "array"', function() {
         expect(result(strongType, weakType)).toEqual(1);
@@ -26,6 +26,14 @@ describe('Pseudocode', function() {
 
       it('random other types are treated as equal', function() {
         expect(result(weakType, 'int')).toEqual(0);
+      });
+
+      it('a collection of known type overrides a collection of amibiguous type', function() {
+        var amibiguousType = new Pseudocode.CollectionType(
+          new Pseudocode.AmbiguousType(['string', 'int'])
+        );
+        expect(result(strongType, amibiguousType)).toEqual(1);
+        expect(result(amibiguousType, strongType)).toEqual(-1);
       });
     });
 
@@ -51,6 +59,15 @@ describe('Pseudocode', function() {
 
       it('a function with a strong collection return type overrides one with a plain "array" return type', function() {
         expect(result(strongestType, strongerType)).toEqual(1);
+      });
+
+      it('a function of known return type overrides a function of ambiguous return type', function() {
+        var stringType = new Pseudocode.FunctionType('string');
+        var amibiguousType = new Pseudocode.FunctionType(
+          new Pseudocode.AmbiguousType(['string', 'int'])
+        );
+        expect(result(stringType, amibiguousType)).toEqual(1);
+        expect(result(amibiguousType, stringType)).toEqual(-1);
       });
     });
 
