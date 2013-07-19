@@ -246,7 +246,8 @@
    *     heuristic.
    *
    * @param {Pseudocode.Identifier} identifier The identifier to register.
-   * @param {string} dataType The name for the type for this identifier.
+   * @param {object} dataType The name, type, or array of names, for the type
+   *     for this identifier.
    */
   Pseudocode.Node.prototype.registerIdentifierType = function(identifier, dataType) {
     if (!this.identifierTypes) {
@@ -259,6 +260,16 @@
 
     if (dataType === 'object') {
       return false;
+    }
+
+    var typesRegistered = 0;
+    if (dataType instanceof Array) {
+      Lazy(dataType).each(function(type) {
+        if (identifier.registerDataType(type)) {
+          ++typesRegistered;
+        }
+      });
+      return typesRegistered > 0;
     }
 
     // Don't replace a strongly-typed function w/ 'function'.
@@ -347,7 +358,7 @@
       }
     }
 
-    return typeList && typeList.length === 1 && typeList.get(0);
+    return typeList && typeList.length > 1 && typeList.join('|');
   };
 
   /**
@@ -483,7 +494,8 @@
    * Basically says 'I believe the expression is of type T', which might be useful
    * in any number of ways.
    *
-   * @param {string} dataType The probable data type for the expression.
+   * @param {object} dataType The probable data type, or array of probable
+   *     types, for the expression.
    */
   Pseudocode.Expression.prototype.probableDataType = function(dataType) {
     if (this instanceof Pseudocode.Identifier) {
@@ -535,6 +547,18 @@
    */
   Pseudocode.SetList.prototype.get = function(n) {
     return this.list[n];
+  };
+
+  /**
+   * Returns a string concatenating all of the values in the list together with
+   * the specified delimiter.
+   *
+   * @param {string} delimiter The character(s) used to separate values in the
+   *     resulting string.
+   * @return {string} The concatenated string.
+   */
+  Pseudocode.SetList.prototype.join = function(delimiter) {
+    return this.list.join(delimiter);
   };
 
   /**
