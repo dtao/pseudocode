@@ -49,7 +49,9 @@ describe('Pseudocode', function() {
         expect(result(strongerType, strongType)).toEqual(1);
       });
 
-      // it('')
+      it('a function with a strong collection return type overrides one with a plain "array" return type', function() {
+        expect(result(strongestType, strongerType)).toEqual(1);
+      });
     });
   });
 });
