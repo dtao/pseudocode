@@ -711,6 +711,8 @@
       'ForStatement': ['init', 'test', 'update', 'body'],
       'SwitchStatement': ['discriminant', 'cases'],
       'SwitchCase': ['test', 'consequent'],
+      'TryStatement': ['block', 'handlers', 'finalizer'],
+      'CatchClause': ['param', 'body'],
       'EmptyStatement': [],
       'ReturnStatement': ['argument'],
     },
@@ -718,6 +720,7 @@
     Expressions: {
       'Identifier': [],
       'Literal': [],
+      'Property': ['key', 'value'],
       'ThisExpression': [],
       'AssignmentExpression': ['left', 'right'],
       'UnaryExpression': ['argument'],
@@ -935,10 +938,15 @@
       case 'string': return 'string';
       case 'number': return 'int';
       case 'boolean': return 'bool';
+      case 'object': return 'object';
 
       default:
         this.fail('Unknown literal type: ' + typeof this.value);
     }
+  };
+
+  Pseudocode.Property.prototype.inferDataType = function() {
+    return this.value.inferDataType();
   };
 
   Pseudocode.ThisExpression.prototype.inferDataType = function() {
