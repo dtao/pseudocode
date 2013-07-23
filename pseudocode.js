@@ -612,7 +612,7 @@
   };
 
   Pseudocode.FunctionType.prototype.toString = function() {
-    return this.returnType ?
+    return this.returnType && this.returnType !== 'void' ?
       'func<' + this.returnType + '>' :
       'function';
   };
@@ -729,6 +729,7 @@
       'CallExpression': ['callee', 'arguments'],
       'ArrayExpression': ['elements'],
       'ObjectExpression': ['properties'],
+      'Property': ['key', 'value'],
       'FunctionExpression': ['id', 'params', 'body']
     }
   };
@@ -1139,7 +1140,7 @@
       return;
     }
     if (this.callee.object.isCollectionType() && this.callee.property.name === 'push') {
-      this.callee.object.scope.registerCollectionType(this.callee.object, {
+      this.callee.object.definingScope().registerCollectionType(this.callee.object, {
         elementType: this.arguments[0].getDataType()
       });
     }
@@ -1164,6 +1165,10 @@
 
   Pseudocode.ObjectExpression.prototype.inferDataType = function() {
     return 'object';
+  };
+
+  Pseudocode.Property.prototype.inferDataType = function() {
+    return this.value.getDataType();
   };
 
   Pseudocode.Functional.extend(Pseudocode.FunctionExpression);

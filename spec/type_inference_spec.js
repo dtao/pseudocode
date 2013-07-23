@@ -35,5 +35,11 @@ describe('Pseudocode', function() {
         'diff': 'int'
       });
     });
+
+    it('propagates type inference upward to parent scopes', function() {
+      inferTypes('var arr = []; function f() { arr.push("foo"); }', {
+        'arr': 'array<string>'
+      });
+    });
   });
 });
