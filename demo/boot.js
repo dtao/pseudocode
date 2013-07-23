@@ -38,7 +38,7 @@ window.addEventListener('load', function() {
       hljs.highlightBlock(output);
 
     } catch (err) {
-      output.textContent = err.stack || err;
+      output.textContent = err + '\n' + err.stack;
     }
   };
 
