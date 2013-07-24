@@ -43,4 +43,6 @@ window.addEventListener('load', function() {
   };
 
   editor.on('change', throttle(handleChange, 1500));
+
+  handleChange();
 });
