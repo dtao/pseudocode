@@ -737,6 +737,21 @@
     }
   };
 
+  var familiarMethods = [
+    ['string', ['charAt', 'substr', 'substring', 'toLowerCase', 'toUpperCase']],
+  ];
+
+  var methodLookup = Lazy(familiarMethods).reduce(function(lookup, methodList) {
+    var type = methodList[0];
+    var methods = methodList[1];
+
+    Lazy(methods).each(function(method) {
+      lookup[method] = type;
+    });
+
+    return lookup;
+  }, {});
+
   Lazy(nodeTypes.Statements).each(function(selectors, name) {
     Pseudocode.Node.define(name, {
       getChildSelectors: function() {
@@ -1151,6 +1166,8 @@
       this.callee.object.definingScope().registerCollectionType(this.callee.object, {
         elementType: this.arguments[0].getDataType()
       });
+    } else if (methodLookup[this.callee.property.name]) {
+      this.callee.object.registerDataType(methodLookup[this.callee.property.name]);
     }
   };
 

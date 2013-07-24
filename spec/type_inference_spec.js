@@ -41,5 +41,11 @@ describe('Pseudocode', function() {
         'arr': 'array<string>'
       });
     });
+
+    it('infers a string from calling charAt', function() {
+      inferTypes('var str; str.charAt(0);', {
+        'str': 'string'
+      });
+    });
   });
 });
