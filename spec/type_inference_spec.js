@@ -38,13 +38,19 @@ describe('Pseudocode', function() {
 
     it('propagates type inference upward to parent scopes', function() {
       inferTypes('var arr = []; function f() { arr.push("foo"); }', {
-        'arr': 'array<string>'
+        'arr': 'list<string>'
       });
     });
 
-    it('infers a string from calling charAt', function() {
+    it('infers a string from a call to charAt', function() {
       inferTypes('var str; str.charAt(0);', {
         'str': 'string'
+      });
+    });
+
+    it('infers a list from a call to push', function() {
+      inferTypes('var arr = []; arr.push(1);', {
+        'arr': 'list<int>'
       });
     });
   });

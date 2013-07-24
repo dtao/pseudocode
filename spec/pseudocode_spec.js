@@ -31,19 +31,19 @@ describe('Pseudocode', function() {
       it('provides recursive access to all the identifies in the program', function() {
         expect(countingSort).toHaveIdentifiers(true, [
           [
-            'countingSort', 'func<array<int>>', [
+            'countingSort', 'func<list<int>>', [
               ['array', 'array<int>'],
               ['range', 'array<int>'],
               ['min', 'int'],
               ['counts', 'array<int>'],
               ['i', 'int'],
-              ['result', 'array<int>']
+              ['result', 'list<int>']
             ]
           ],
           [
-            'createArray', 'func<array<int>>', [
+            'createArray', 'func<list<int>>', [
               ['range', 'array<int>'],
-              ['arr', 'array<int>'],
+              ['arr', 'list<int>'],
               ['i', 'int']
             ]
           ],

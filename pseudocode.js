@@ -312,7 +312,7 @@
     }
 
     var collectionType = options.elementType ?
-      new Pseudocode.CollectionType(options.elementType) : 'array';
+      new Pseudocode.CollectionType(options.elementType, options.collectionType) : 'array';
 
     return this.registerIdentifierType(identifier, collectionType);
   };
@@ -620,15 +620,16 @@
   /**
    * Represents a collection along with the type of elements it contains.
    *
+   * @param {string} collectionType The type of collection.
    * @param {string} elementType The type of elements in the collection.
    * @constructor
    */
-  Pseudocode.CollectionType = function(elementType) {
+  Pseudocode.CollectionType = function(elementType, collectionType) {
     if (elementType instanceof Array) {
       elementType = new Pseudocode.AmbiguousType(elementType);
     }
 
-    this.collectionType = 'array';
+    this.collectionType = collectionType || 'array';
     this.elementType = elementType;
   };
 
@@ -646,8 +647,8 @@
 
   Pseudocode.CollectionType.prototype.toString = function() {
     return this.elementType ?
-      'array<' + this.elementType + '>' :
-      'array';
+      this.collectionType + '<' + this.elementType + '>' :
+      this.collectionType;
   };
 
   /**
@@ -1164,6 +1165,7 @@
     }
     if (this.callee.object.isCollectionType() && this.callee.property.name === 'push') {
       this.callee.object.definingScope().registerCollectionType(this.callee.object, {
+        collectionType: 'list',
         elementType: this.arguments[0].getDataType()
       });
     } else if (methodLookup[this.callee.property.name]) {
