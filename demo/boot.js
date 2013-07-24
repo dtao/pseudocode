@@ -30,7 +30,7 @@ window.addEventListener('load', function() {
     theme: 'ambiance'
   });
 
-  var handleChange = function(e, obj) {
+  var updateResult = function(e, obj) {
     try {
       var program = Pseudocode.fromJavaScript(editor.getValue()).program;
       var identifiers = program.getIdentifiers(true);
@@ -42,7 +42,7 @@ window.addEventListener('load', function() {
     }
   };
 
-  editor.on('change', throttle(handleChange, 1500));
+  editor.on('change', throttle(updateResult, 1500));
 
-  handleChange();
+  updateResult();
 });
