@@ -24,10 +24,25 @@ function throttle(fn, delay) {
   };
 }
 
+function getSource(url, callback) {
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', url);
+
+  xhr.addEventListener('load', function() {
+    callback(xhr.responseText);
+  });
+
+  xhr.send();
+}
+
 window.addEventListener('load', function() {
   var output = document.getElementById('output');
   var editor = CodeMirror.fromTextArea(document.getElementById('source'), {
     theme: 'ambiance'
+  });
+
+  getSource('example.js', function(source) {
+    editor.setValue(source);
   });
 
   var handleChange = function(e, obj) {
